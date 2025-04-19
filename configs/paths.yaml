@@ -1,0 +1,3 @@
+data_dir : "data"
+log_dir : "logs"
+weights_dir : "weights"
