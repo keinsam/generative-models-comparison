@@ -1,9 +1,9 @@
 import tqdm
 import torch
-from torch.nn import nn
+import torch.nn as nn
 
 class Diffusion:
-    def __init__(self, noise_steps=1000, beta_start=1e-4, beta_end=0.02, img_size=256, device="cpu"):
+    def __init__(self, noise_steps=100, beta_start=1e-4, beta_end=0.02, img_size=32, device="cpu"):
         self.noise_steps = noise_steps
         self.beta_start = beta_start
         self.beta_end = beta_end
@@ -53,7 +53,7 @@ class DDPM(nn.Module):
         self.time_dim = time_dim
         # Down blocks
         self.down1 = nn.Sequential(
-            nn.Conv2d(in_channels, 64, kernel_size=3, stride=2, padding=1),
+            nn.Conv2d(in_channels, 64, kernel_size=3, stride=1, padding=1), 
             nn.ReLU()
         )
         self.down2 = nn.Sequential(
@@ -66,7 +66,7 @@ class DDPM(nn.Module):
         )
         # Bottleneck
         self.bottleneck = nn.Sequential(
-            nn.Conv2d(256, 256, kernel_size=3, stride=2, padding=1),
+            nn.Conv2d(256, 256, kernel_size=3, stride=1, padding=1),
             nn.BatchNorm2d(256),
             nn.ReLU()
         )
@@ -80,7 +80,7 @@ class DDPM(nn.Module):
             nn.ReLU()
         )
         self.up3 = nn.Sequential(
-            nn.ConvTranspose2d(64, out_channels, kernel_size=3, stride=2, padding=1, output_padding=1),
+            nn.ConvTranspose2d(64, out_channels, kernel_size=3, stride=1, padding=1),
             nn.Tanh()
         )
     
