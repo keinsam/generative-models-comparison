@@ -2,27 +2,6 @@ import tqdm
 import torch
 from torch.nn import nn
 
-
-class UpBlock(nn.Module) :
-    def __init__(self, in_channels, out_channels, kernel_size, stride, padding) :
-        super().__init__()
-        self.block = nn.Sequential(
-            nn.ConvTranspose2d(in_channels, out_channels, kernel_size, stride, padding),
-            nn.ReLU(),
-        )
-    def forward(self, x) :
-        return self.block(x)
-
-class DownBlock(nn.Module) :
-    def __init__(self, in_channels, out_channels, kernel_size, stride, padding) :
-        super().__init__()
-        self.block = nn.Sequential(
-            nn.Conv2d(in_channels, out_channels, kernel_size, stride, padding),
-            nn.ReLU(),
-        )
-    def forward(self, x) :
-        return self.block(x)
-
 class Diffusion:
     def __init__(self, noise_steps=1000, beta_start=1e-4, beta_end=0.02, img_size=256, device="cpu"):
         self.noise_steps = noise_steps
@@ -73,24 +52,42 @@ class DDPM(nn.Module):
         super().__init__()
         self.time_dim = time_dim
         # Down blocks
-        self.down1 = DownBlock(in_channels, 64)
-        self.down2 = DownBlock(64, 128)
-        self.down3 = DownBlock(128, 256)
+        self.down1 = nn.Sequential(
+            nn.Conv2d(in_channels, 64, kernel_size=3, stride=2, padding=1),
+            nn.ReLU()
+        )
+        self.down2 = nn.Sequential(
+            nn.Conv2d(64, 128, kernel_size=3, stride=2, padding=1),
+            nn.ReLU()
+        )
+        self.down3 = nn.Sequential(
+            nn.Conv2d(128, 256, kernel_size=3, stride=2, padding=1),
+            nn.ReLU()
+        )
         # Bottleneck
         self.bottleneck = nn.Sequential(
-            nn.Conv2d(256, 256, 3, padding=1),
+            nn.Conv2d(256, 256, kernel_size=3, stride=2, padding=1),
             nn.BatchNorm2d(256),
             nn.ReLU()
         )
         # Up blocks
-        self.up1 = UpBlock(256, 128)
-        self.up2 = UpBlock(128, 64)
-        self.up3 = UpBlock(64, out_channels)
+        self.up1 = nn.Sequential(
+            nn.ConvTranspose2d(256, 128, kernel_size=3, stride=2, padding=1, output_padding=1),
+            nn.ReLU()
+        )
+        self.up2 = nn.Sequential(
+            nn.ConvTranspose2d(128, 64, kernel_size=3, stride=2, padding=1, output_padding=1),
+            nn.ReLU()
+        )
+        self.up3 = nn.Sequential(
+            nn.ConvTranspose2d(64, out_channels, kernel_size=3, stride=2, padding=1, output_padding=1),
+            nn.Tanh()
+        )
     
     def pos_encoding(self, t, channels):
         inv_freq = 1.0 / (
             10000
-            ** (torch.arange(0, channels, 2, device=self.device).float() / channels)
+            ** (torch.arange(0, channels, 2, device=t.device).float() / channels)
         )
         pos_enc_a = torch.sin(t.repeat(1, channels // 2) * inv_freq)
         pos_enc_b = torch.cos(t.repeat(1, channels // 2) * inv_freq)
@@ -98,8 +95,26 @@ class DDPM(nn.Module):
         return pos_enc
 
     def forward(self, x, t) :
-        pass
-        
+        t = t.unsqueeze(-1).type(torch.float)
+        t = self.pos_encoding(t, self.time_dim)
+        t = t[:, :, None, None]
+        # Down
+        x = self.down1(x)
+        x = x + t[:, :x.shape[1], :, :]
+        x = self.down2(x)
+        x = x + t[:, :x.shape[1], :, :]
+        x = self.down3(x)
+        x = x + t[:, :x.shape[1], :, :]
+        # Bottleneck
+        x = self.bottleneck(x)
+        x = x + t[:, :x.shape[1], :, :]
+        # Up
+        x = self.up1(x)
+        x = x + t[:, :x.shape[1], :, :]
+        x = self.up2(x)
+        x = x + t[:, :x.shape[1], :, :]
+        x = self.up3(x)
+        return x
 
 
 
