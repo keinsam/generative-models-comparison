@@ -72,7 +72,7 @@ if __name__ == "__main__" :
         transforms.ToTensor(),
         transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)) 
     ])
-    dataset = BaseCIFAR10(root="data/", train=True, transform=transform, subset_size=5000)
+    dataset = BaseCIFAR10(root="data/", train=True, transform=transform, subset_size=10000)
     dataloader = DataLoader(dataset, batch_size=ddpm_hparams["train"]["batch_size"], shuffle=True)
 
     # DDPM model
@@ -87,11 +87,11 @@ if __name__ == "__main__" :
                           device=DEVICE)
     
     # Optimizer
-    optimizer = optim.RMSprop(ddpm.parameters(),
-                              lr=ddpm_hparams["train"]["learning_rate"],
-                              alpha=0.99,
-                              momentum=0.9)
+    # optimizer = optim.RMSprop(ddpm.parameters(),
+    #                           lr=ddpm_hparams["train"]["learning_rate"])
     # scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=ddpm_hparams["train"]["nb_epochs"])
+    optimizer = optim.Adam(ddpm.parameters(),
+                           lr=ddpm_hparams["train"]["learning_rate"])
 
     train_ddpm(ddpm, diffusion, dataloader, optimizer,
                device = DEVICE,
