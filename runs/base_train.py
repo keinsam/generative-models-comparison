@@ -46,6 +46,7 @@ def train_ddpm(model, diffusion, dataloader, optimizer, device, epochs, path):
             loss = nn.MSELoss()(noise, predicted_noise)
             optimizer.zero_grad()
             loss.backward()
+            nn.utils.clip_grad_norm_(model.parameters(), 1.0)
             optimizer.step()
             pbar.set_postfix(loss=loss.item())
     torch.save(model.state_dict(), path)
