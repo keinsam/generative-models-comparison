@@ -48,16 +48,20 @@ class Diffusion:
 
 
 class DDPM(nn.Module):
-    def __init__(self, in_channels=3, out_channels=3, time_dim=32):
+    def __init__(self, in_channels=3, out_channels=3, time_dim=256):
         super().__init__()
-        self.time_dim = time_dim # = in_channels
+        self.time_dim = time_dim
+        self.time_proj = nn.Linear(time_dim, in_channels) 
         # Down blocks
         self.down = nn.Sequential(
             nn.Conv2d(in_channels, 64, kernel_size=3, stride=1, padding=1), 
+            nn.BatchNorm2d(64),
             nn.ReLU(),
             nn.Conv2d(64, 128, kernel_size=3, stride=2, padding=1),
+            nn.BatchNorm2d(128),
             nn.ReLU(),
             nn.Conv2d(128, 256, kernel_size=3, stride=2, padding=1),
+            nn.BatchNorm2d(256),
             nn.ReLU()
         )
         # Bottleneck
@@ -69,10 +73,12 @@ class DDPM(nn.Module):
         # Up blocks
         self.up = nn.Sequential(
             nn.ConvTranspose2d(256, 128, kernel_size=3, stride=2, padding=1, output_padding=1),
+            nn.BatchNorm2d(128),
             nn.ReLU(),
             nn.ConvTranspose2d(128, 64, kernel_size=3, stride=2, padding=1, output_padding=1),
+            nn.BatchNorm2d(64),
             nn.ReLU(),
-            nn.ConvTranspose2d(64, out_channels, kernel_size=3, stride=1, padding=1),
+            nn.Conv2d(64, out_channels, kernel_size=3, stride=1, padding=1),
             nn.Tanh()
         )
     
@@ -89,10 +95,8 @@ class DDPM(nn.Module):
     def forward(self, x, t) :
         t = t.unsqueeze(-1).type(torch.float)
         t = self.pos_encoding(t, self.time_dim)
+        t = self.time_proj(t)
         t = t[:, :, None, None]
-        # Project time embedding to match input channels
-        t_proj = nn.Conv2d(self.time_dim, x.shape[1], kernel_size=1).to(x.device)
-        t = t_proj(t)
         # Add time embedding to the input
         x = x + t
         # Down
