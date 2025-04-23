@@ -1,4 +1,4 @@
-import tqdm
+from tqdm import tqdm
 import torch
 import torch.nn as nn
 
@@ -48,19 +48,15 @@ class Diffusion:
 
 
 class DDPM(nn.Module):
-    def __init__(self, in_channels=3, out_channels=3, time_dim=256):
+    def __init__(self, in_channels=3, out_channels=3, time_dim=32):
         super().__init__()
-        self.time_dim = time_dim
+        self.time_dim = time_dim # = in_channels
         # Down blocks
-        self.down1 = nn.Sequential(
+        self.down = nn.Sequential(
             nn.Conv2d(in_channels, 64, kernel_size=3, stride=1, padding=1), 
-            nn.ReLU()
-        )
-        self.down2 = nn.Sequential(
+            nn.ReLU(),
             nn.Conv2d(64, 128, kernel_size=3, stride=2, padding=1),
-            nn.ReLU()
-        )
-        self.down3 = nn.Sequential(
+            nn.ReLU(),
             nn.Conv2d(128, 256, kernel_size=3, stride=2, padding=1),
             nn.ReLU()
         )
@@ -71,15 +67,11 @@ class DDPM(nn.Module):
             nn.ReLU()
         )
         # Up blocks
-        self.up1 = nn.Sequential(
+        self.up = nn.Sequential(
             nn.ConvTranspose2d(256, 128, kernel_size=3, stride=2, padding=1, output_padding=1),
-            nn.ReLU()
-        )
-        self.up2 = nn.Sequential(
+            nn.ReLU(),
             nn.ConvTranspose2d(128, 64, kernel_size=3, stride=2, padding=1, output_padding=1),
-            nn.ReLU()
-        )
-        self.up3 = nn.Sequential(
+            nn.ReLU(),
             nn.ConvTranspose2d(64, out_channels, kernel_size=3, stride=1, padding=1),
             nn.Tanh()
         )
@@ -98,22 +90,17 @@ class DDPM(nn.Module):
         t = t.unsqueeze(-1).type(torch.float)
         t = self.pos_encoding(t, self.time_dim)
         t = t[:, :, None, None]
+        # Project time embedding to match input channels
+        t_proj = nn.Conv2d(self.time_dim, x.shape[1], kernel_size=1).to(x.device)
+        t = t_proj(t)
+        # Add time embedding to the input
+        x = x + t
         # Down
-        x = self.down1(x)
-        x = x + t[:, :x.shape[1], :, :]
-        x = self.down2(x)
-        x = x + t[:, :x.shape[1], :, :]
-        x = self.down3(x)
-        x = x + t[:, :x.shape[1], :, :]
+        x = self.down(x)
         # Bottleneck
         x = self.bottleneck(x)
-        x = x + t[:, :x.shape[1], :, :]
         # Up
-        x = self.up1(x)
-        x = x + t[:, :x.shape[1], :, :]
-        x = self.up2(x)
-        x = x + t[:, :x.shape[1], :, :]
-        x = self.up3(x)
+        x = self.up(x)
         return x
 
 
