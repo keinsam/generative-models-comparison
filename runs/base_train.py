@@ -90,33 +90,33 @@ if __name__ == "__main__" :
         transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)) 
     ])
     dataset = BaseCIFAR10(root="data/", train=True, transform=transform, subset_size=10000)
-    dataloader = DataLoader(dataset, batch_size=ddpm_hparams["train"]["batch_size"], shuffle=True)
+    dataloader = DataLoader(dataset, batch_size=ddpm_hparams["batch_size"], shuffle=True)
 
     # DDPM model
-    ddpm = DDPM(in_channels=ddpm_hparams["model"]["in_channels"],
-                 out_channels=ddpm_hparams["model"]["out_channels"],
-                 time_dim=ddpm_hparams["model"]["time_dim"],
+    ddpm = DDPM(in_channels=ddpm_hparams["in_channels"],
+                 out_channels=ddpm_hparams["out_channels"],
+                 time_dim=ddpm_hparams["time_dim"],
                  ).to(DEVICE)
-    diffusion = Diffusion(noise_steps=ddpm_hparams["model"]["noise_steps"],
-                          beta_start=ddpm_hparams["model"]["beta_start"],
-                          beta_end=ddpm_hparams["model"]["beta_end"],
-                          img_size=ddpm_hparams["model"]["img_size"],
+    diffusion = Diffusion(noise_steps=ddpm_hparams["noise_steps"],
+                          beta_start=ddpm_hparams["beta_start"],
+                          beta_end=ddpm_hparams["beta_end"],
+                          img_size=ddpm_hparams["img_size"],
                           device=DEVICE)
     
     # Optimizer
     # optimizer = optim.RMSprop(ddpm.parameters(),
-    #                           lr=ddpm_hparams["train"]["learning_rate"])
-    # scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=ddpm_hparams["train"]["nb_epochs"])
+    #                           lr=ddpm_hparams["learning_rate"])
+    # scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=ddpm_hparams["nb_epochs"])
     optimizer = optim.Adam(ddpm.parameters(),
-                           lr=ddpm_hparams["train"]["learning_rate"])
+                           lr=ddpm_hparams["learning_rate"])
     
     # Tensorboard
     writer = SummaryWriter(log_dir=LOG_DIR.joinpath(DDPM_MODEL_NAME))
-    writer.add_hparams(ddpm_hparams)
+    writer.add_hparams(ddpm_hparams, {})
 
     train_ddpm(ddpm, diffusion, dataloader, optimizer,
                device = DEVICE,
-               epochs=ddpm_hparams["train"]["nb_epochs"],
+               epochs=ddpm_hparams["nb_epochs"],
                path=DDPM_MODEL_PATH,
                writer=writer)
-    # generate_and_visualize_samples(ddpm, diffusion, DEVICE)
+    generate_and_visualize_samples(ddpm, diffusion, DEVICE)
