@@ -34,21 +34,37 @@ ddpm_hparams = hparams["ddpm"]
 
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 
-def train_ddpm(model, diffusion, dataloader, optimizer, device, epochs, path):
+def train_ddpm(model, diffusion, dataloader, optimizer, device, epochs, path, writer=None):
     model.train()
+    global_step = 0
     for epoch in range(epochs):
         pbar = tqdm(dataloader, desc=f"Epoch {epoch+1}/{epochs}")
-        for images, _ in pbar:    
+        for images, _ in pbar:
             images = images.to(device)
             t = diffusion.sample_timesteps(images.shape[0]).to(device)
             x_t, noise = diffusion.noise_images(images, t)
             predicted_noise = model.forward(x_t, t)
             loss = nn.MSELoss()(noise, predicted_noise)
+
             optimizer.zero_grad()
             loss.backward()
             nn.utils.clip_grad_norm_(model.parameters(), 1.0)
             optimizer.step()
-            pbar.set_postfix(loss=loss.item())
+
+            writer.add_scalar("Loss/train", loss.item(), global_step)
+            global_step += 1
+            pbar.set_postfix({"loss": loss.item()})
+    
+        if writer is not None:
+            if epoch % 5 == 0:
+                # Save checkpoint
+                # checkpoint_path = path.parent / f"{path.stem}_epoch{epoch}.pth"
+                # torch.save(model.state_dict(), checkpoint_path)
+                # print(f"Checkpoint saved to {checkpoint_path}")
+                with torch.no_grad():
+                    samples = diffusion.sample(model, n=8)
+                    writer.add_images("Samples", (samples + 1) / 2.0, epoch)
+    
     torch.save(model.state_dict(), path)
     print(f"Model saved to {path}")
 
@@ -93,9 +109,14 @@ if __name__ == "__main__" :
     # scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=ddpm_hparams["train"]["nb_epochs"])
     optimizer = optim.Adam(ddpm.parameters(),
                            lr=ddpm_hparams["train"]["learning_rate"])
+    
+    # Tensorboard
+    writer = SummaryWriter(log_dir=LOG_DIR.joinpath(DDPM_MODEL_NAME))
+    writer.add_hparams(ddpm_hparams)
 
     train_ddpm(ddpm, diffusion, dataloader, optimizer,
                device = DEVICE,
                epochs=ddpm_hparams["train"]["nb_epochs"],
-               path=DDPM_MODEL_PATH)
-    generate_and_visualize_samples(ddpm, diffusion, DEVICE)
+               path=DDPM_MODEL_PATH,
+               writer=writer)
+    # generate_and_visualize_samples(ddpm, diffusion, DEVICE)
