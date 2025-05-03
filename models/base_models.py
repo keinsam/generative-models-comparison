@@ -40,14 +40,13 @@ class Diffusion:
                     noise = torch.randn_like(x)
                 else:
                     noise = torch.zeros_like(x)
-                # x = 1 / torch.sqrt(alpha) * (x - ((1 - alpha) / (torch.sqrt(1 - alpha_hat))) * predicted_noise) + torch.sqrt(beta) * noise
                 x = (1 / torch.sqrt(alpha)) * (x - ((1 - alpha) / (torch.sqrt(1 - alpha_hat))) * predicted_noise) + torch.sqrt(beta) * noise
         model.train()
         x = (x.clamp(-1, 1) + 1) / 2
         x = (x * 255).type(torch.uint8)
         return x
 
-class Down(nn.Module):
+class DDPM_Down(nn.Module):
     def __init__(self, in_channels, out_channels, emb_dim=256):
         super().__init__()
         self.conv = nn.Sequential(
@@ -60,10 +59,10 @@ class Down(nn.Module):
 
     def forward(self, x, t):
         x = self.conv(x)
-        emb = self.emb_proj(t)[:, :, None, None].expand_as(x)
+        emb = self.emb_proj(t)[:, :, None, None].repeat(1, 1, x.shape[-2], x.shape[-1]) #.expand_as(x)
         return x + emb
 
-class Up(nn.Module):
+class DDPM_Up(nn.Module):
     def __init__(self, in_channels, out_channels, emb_dim=256):
         super().__init__()
         self.up = nn.Upsample(scale_factor=2, mode='bilinear', align_corners=True)
@@ -77,7 +76,7 @@ class Up(nn.Module):
     def forward(self, x, t):
         x = self.up(x)
         x = self.conv(x)
-        emb = self.emb_proj(t)[:, :, None, None].expand_as(x)
+        emb = self.emb_proj(t)[:, :, None, None].repeat(1, 1, x.shape[-2], x.shape[-1]) #.expand_as(x)
         return x + emb
 
 class DDPM(nn.Module):
@@ -86,9 +85,9 @@ class DDPM(nn.Module):
         self.time_dim = time_dim
         
         # Downsample
-        self.down1 = Down(in_channels, 64)
-        self.down2 = Down(64, 128)
-        self.down3 = Down(128, 256)
+        self.down1 = DDPM_Down(in_channels, 64, time_dim)
+        self.down2 = DDPM_Down(64, 128, time_dim)
+        self.down3 = DDPM_Down(128, 256, time_dim)
         
         # Bottleneck
         self.bottleneck = nn.Sequential(
@@ -98,12 +97,15 @@ class DDPM(nn.Module):
         )
         
         # Upsample
-        self.up1 = Up(256, 128)
-        self.up2 = Up(128, 64)
-        self.up3 = Up(64, out_channels)
+        self.up1 = DDPM_Up(256, 128, time_dim)
+        self.up2 = DDPM_Up(128, 64, time_dim)
+        self.up3 = DDPM_Up(64, out_channels, time_dim)
         
         # Output
-        self.out = nn.Conv2d(out_channels, out_channels, kernel_size=1)
+        self.out = nn.Sequential(
+            nn.Conv2d(out_channels, out_channels, kernel_size=1),
+            nn.Tanh()
+        )
 
     def pos_encoding(self, t, channels):
         inv_freq = 1.0 / (10000 ** (torch.arange(0, channels, 2, device=t.device).float() / channels))
@@ -111,6 +113,9 @@ class DDPM(nn.Module):
             torch.sin(t * inv_freq),
             torch.cos(t * inv_freq)
         ], dim=-1)
+        #     pos_enc_a = torch.sin(t.repeat(1, channels // 2) * inv_freq)
+        #     pos_enc_b = torch.cos(t.repeat(1, channels // 2) * inv_freq)
+        #     pos_enc = torch.cat([pos_enc_a, pos_enc_b], dim=-1)
         return pos_enc
 
     def forward(self, x, t):
@@ -133,3 +138,98 @@ class DDPM(nn.Module):
         
         return self.out(x)
 
+
+
+class GAN_Down(nn.Module):
+    def __init__(self, in_channels, out_channels):
+        super().__init__()
+        self.conv = nn.Sequential(
+            nn.Conv2d(in_channels, out_channels, kernel_size=3, padding=1),
+            nn.LeakyReLU(0.2),
+            nn.MaxPool2d(2)
+        )
+
+    def forward(self, x):
+        return self.conv(x)
+
+class GAN_Up(nn.Module):
+    def __init__(self, in_channels=3, out_channels=3):
+        super().__init__()
+        self.up = nn.Upsample(scale_factor=2, mode='bilinear', align_corners=True)
+        self.conv = nn.Sequential(
+            nn.Conv2d(in_channels, out_channels, kernel_size=3, padding=1),
+            nn.BatchNorm2d(out_channels),
+            nn.ReLU()
+        )
+
+    def forward(self, x):
+        x = self.up(x)
+        return self.conv(x)
+
+class GAN_Generator(nn.Module):
+    def __init__(self, latent_dim=100, out_channels=3):
+        super().__init__()
+        self.latent_dim = latent_dim
+        
+        # Initial projection
+        self.init_proj = nn.Sequential(
+            nn.Linear(latent_dim, 256 * 4 * 4),
+            nn.BatchNorm1d(256 * 4 * 4),
+            nn.ReLU()
+        )
+        
+        # Upsample
+        self.up1 = GAN_Up(256, 128)
+        self.up2 = GAN_Up(128, 64)
+        self.up3 = GAN_Up(64, out_channels)
+        
+        # Output
+        self.out = nn.Sequential(
+            nn.Conv2d(out_channels, out_channels, kernel_size=1),
+            nn.Tanh()
+        )
+
+    def forward(self, z):
+        # Project and reshape
+        x = self.init_proj(z)
+        x = x.view(-1, 256, 4, 4)
+        
+        # Upsample
+        x = self.up1(x)
+        x = self.up2(x)
+        x = self.up3(x)
+        
+        return self.out(x)
+
+class GAN_Critic(nn.Module):
+    def __init__(self, in_channels=3):
+        super().__init__()
+        
+        # Downsample
+        self.down1 = GAN_Down(in_channels, 64)
+        self.down2 = GAN_Down(64, 128)
+        self.down3 = GAN_Down(128, 256)
+        
+        # Bottleneck
+        self.bottleneck = nn.Sequential(
+            nn.Conv2d(256, 256, kernel_size=3, padding=1),
+            nn.LeakyReLU(0.2)
+        )
+        
+        # Output
+        self.out = nn.Sequential(
+            nn.AdaptiveAvgPool2d(1),
+            nn.Flatten(),
+            nn.Linear(256, 1)
+        )
+
+    def forward(self, x):
+        # Downsample
+        x = self.down1(x)
+        x = self.down2(x)
+        x = self.down3(x)
+        
+        # Bottleneck
+        x = self.bottleneck(x)
+        
+        return self.out(x)
