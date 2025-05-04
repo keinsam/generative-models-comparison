@@ -53,7 +53,6 @@ gan_writer.add_hparams(gan_hparams, {})
 
 
 
-
 def train_gan(generator, critic, dataloader, generator_optimizer, critic_optimizer, device, nb_epochs, path,
               nb_critic_itr=5, weight_clip=0.01, writer=None) :
     generator.train()

@@ -5,29 +5,44 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 import yaml
 from tqdm import tqdm
 import torch
-# import torch.nn as nn
 import torch.optim as optim
-import torchvision
-# import torchvision.datasets as datasets
-import torchvision.transforms as transforms
 from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
+import torchvision
+import torchvision.transforms as transforms
 from models.base_models3 import DummyEpsModel, DDPM
 from datasets.base_datasets import BaseCIFAR10
 
-DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
-ddpm = DDPM(eps_model=DummyEpsModel(3), betas=(1e-4, 0.02), n_T=200)
-ddpm.to(DEVICE)
 
-tf = transforms.Compose(
+with open("configs/base_hparams.yaml", "r") as f :
+    hparams = yaml.safe_load(f)
+ddpm_hparams = hparams["ddpm"]
+
+DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
+
+transforms = transforms.Compose(
     [
         transforms.ToTensor(),
-        transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)),
+        transforms.Normalize(
+            [0.5 for _ in range(ddpm_hparams["channels_img"])], [0.5 for _ in range(ddpm_hparams["channels_img"])]
+        ),
     ]
 )
-dataset = BaseCIFAR10(root="data/", train=True, transform=tf, subset_size=1000) # added
-dataloader = DataLoader(dataset, batch_size=16, shuffle=True) #, num_workers=20)
-optim = torch.optim.Adam(ddpm.parameters(), lr=3e-4)
+
+dataset = BaseCIFAR10(root="data/", train=True, transform=transforms, subset_size=5000)
+dataloader = DataLoader(dataset, batch_size=ddpm_hparams["batch_size"], shuffle=True)
+
+ddpm = DDPM(eps_model=DummyEpsModel(ddpm_hparams["in_channels"], ddpm_hparams["time_dim"]), 
+            betas=(ddpm_hparams["beta_start"], ddpm_hparams["beta_end"]), n_T=ddpm_hparams["noise_steps"]).to(DEVICE)
+
+optimizer = optim.Adam(ddpm.parameters(), lr=ddpm_hparams["learning_rate"])
+
+ddpm_writer = SummaryWriter(log_dir="./logs/base_ddpm_v0")
+ddpm_writer.add_hparams(ddpm_hparams, {})
+
+
+
+
 
 def train_ddpm(model, dataloader, optimizer, device, nb_epoch, path, writer=None):
     model.train()
@@ -55,8 +70,8 @@ def train_ddpm(model, dataloader, optimizer, device, nb_epoch, path, writer=None
         if writer is not None : # and epoch % 5 == 0 :
             # model.eval()
             with torch.no_grad() :
-                samples = model.sample(4, (3, 32, 32), device)
-                grid = torchvision.utils.make_grid(samples, nrow=4, normalize=True)
+                samples = model.sample(1, (3, 32, 32), device)
+                grid = torchvision.utils.make_grid(samples, nrow=1, normalize=True)
                 writer.add_image("BaseDDPM/Samples", grid, epoch)
 
     # Save model
@@ -64,13 +79,12 @@ def train_ddpm(model, dataloader, optimizer, device, nb_epoch, path, writer=None
 
 
 if __name__ == "__main__":
-    writer = SummaryWriter(log_dir="./logs/base_ddpm_v0")
     train_ddpm(
         model=ddpm,
         dataloader=dataloader,
-        optimizer=optim,
+        optimizer=optimizer,
         device=DEVICE,
-        nb_epoch=10,
-        path="./bin/ddpm_cifar10.pth",
-        writer=writer,
+        nb_epoch=ddpm_hparams["nb_epochs"],
+        path="./weights/base_ddpm_v0.pth",
+        writer=ddpm_writer,
     )
