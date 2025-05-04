@@ -4,7 +4,7 @@ ddpm :
   beta_start : 0.0001
   beta_end : 0.02
   img_size : 32
-  channels_img : 3
+  img_channels : 3
   time_dim : 128 # 256 in original paper
   # Train hyperparameters
   batch_size : 2 # 16

@@ -24,7 +24,7 @@ transforms = transforms.Compose(
     [
         transforms.ToTensor(),
         transforms.Normalize(
-            [0.5 for _ in range(ddpm_hparams["channels_img"])], [0.5 for _ in range(ddpm_hparams["channels_img"])]
+            [0.5 for _ in range(ddpm_hparams["img_channels"])], [0.5 for _ in range(ddpm_hparams["img_channels"])]
         ),
     ]
 )
@@ -32,12 +32,12 @@ transforms = transforms.Compose(
 dataset = BaseCIFAR10(root="data/", train=True, transform=transforms, subset_size=10)
 dataloader = DataLoader(dataset, batch_size=ddpm_hparams["batch_size"], shuffle=True)
 
-ddpm = DDPM(eps_model=DummyEpsModel(ddpm_hparams["channels_img"], ddpm_hparams["time_dim"]), 
+ddpm = DDPM(eps_model=DummyEpsModel(ddpm_hparams["img_channels"], ddpm_hparams["time_dim"]), 
             betas=(ddpm_hparams["beta_start"], ddpm_hparams["beta_end"]), n_T=ddpm_hparams["noise_steps"]).to(DEVICE)
 
 optimizer = optim.Adam(ddpm.parameters(), lr=ddpm_hparams["learning_rate"])
 
-ddpm_writer = SummaryWriter(log_dir="./logs/base_ddpm_v0")
+ddpm_writer = SummaryWriter(log_dir="./logs/base_ddpm_v1")
 ddpm_writer.add_hparams(ddpm_hparams, {})
 
 
@@ -85,6 +85,6 @@ if __name__ == "__main__":
         optimizer=optimizer,
         device=DEVICE,
         nb_epoch=ddpm_hparams["nb_epochs"],
-        path="./weights/base_ddpm_v0.pth",
+        path="./weights/base_ddpm_v1.pth",
         writer=ddpm_writer,
     )
