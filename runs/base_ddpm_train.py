@@ -10,7 +10,7 @@ from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 import torchvision
 import torchvision.transforms as transforms
-from models.base_models3 import DummyEpsModel, DDPM
+from models.base_ddpm_models import DummyEpsModel, DDPM
 from datasets.base_datasets import BaseCIFAR10
 
 
@@ -70,7 +70,7 @@ def train_ddpm(model, dataloader, optimizer, device, nb_epoch, path, writer=None
         if writer is not None : # and epoch % 5 == 0 :
             # model.eval()
             with torch.no_grad() :
-                samples = model.sample(1, (3, 32, 32), device)
+                samples = model.sample(2, (3, 32, 32), device)
                 grid = torchvision.utils.make_grid(samples, nrow=1, normalize=True)
                 writer.add_image("BaseDDPM/Samples", grid, epoch)
 

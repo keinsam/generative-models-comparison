@@ -10,7 +10,7 @@ from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 import torchvision
 import torchvision.transforms as transforms
-from models.base_models2 import Discriminator, Generator, initialize_weights
+from models.base_gan_models import Discriminator, Generator, initialize_weights
 from datasets.base_datasets import BaseCIFAR10
 
 
