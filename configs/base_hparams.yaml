@@ -4,12 +4,11 @@ ddpm :
   beta_start : 0.0001
   beta_end : 0.02
   img_size : 32
-  in_channels : 3
-  out_channels : 3
+  channels_img : 3
   time_dim : 128 # 256 in original paper
   # Train hyperparameters
-  batch_size : 16 # works with 12
-  nb_epochs : 200
+  batch_size : 2 # 16
+  nb_epochs : 100
   learning_rate : 0.0003 # works with 0.0003
 
 gan :

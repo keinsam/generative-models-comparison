@@ -29,10 +29,10 @@ transforms = transforms.Compose(
     ]
 )
 
-dataset = BaseCIFAR10(root="data/", train=True, transform=transforms, subset_size=5000)
+dataset = BaseCIFAR10(root="data/", train=True, transform=transforms, subset_size=10)
 dataloader = DataLoader(dataset, batch_size=ddpm_hparams["batch_size"], shuffle=True)
 
-ddpm = DDPM(eps_model=DummyEpsModel(ddpm_hparams["in_channels"], ddpm_hparams["time_dim"]), 
+ddpm = DDPM(eps_model=DummyEpsModel(ddpm_hparams["channels_img"], ddpm_hparams["time_dim"]), 
             betas=(ddpm_hparams["beta_start"], ddpm_hparams["beta_end"]), n_T=ddpm_hparams["noise_steps"]).to(DEVICE)
 
 optimizer = optim.Adam(ddpm.parameters(), lr=ddpm_hparams["learning_rate"])
