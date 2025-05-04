@@ -5,6 +5,8 @@ import torch.nn as nn
 class Discriminator(nn.Module):
     def __init__(self, channels_img, features_d):
         super(Discriminator, self).__init__()
+        self.channels_img = channels_img
+        self.features_d = features_d
         self.disc = nn.Sequential(
             # input: N x channels_img x 64 x 64
             nn.Conv2d(channels_img, features_d, kernel_size=4, stride=2, padding=1),
@@ -31,6 +33,9 @@ class Discriminator(nn.Module):
 class Generator(nn.Module):
     def __init__(self, latent_dim, channels_img, features_g):
         super(Generator, self).__init__()
+        self.latent_dim = latent_dim
+        self.channels_img = channels_img
+        self.features_g = features_g
         self.net = nn.Sequential(
             # Input: N x latent_dim x 1 x 1
             self._block(latent_dim, features_g * 8, 4, 1, 0),  # img: 4x4
