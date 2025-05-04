@@ -32,6 +32,7 @@ optim = torch.optim.Adam(ddpm.parameters(), lr=3e-4)
 def train_ddpm(model, dataloader, optimizer, device, nb_epoch, path, writer=None):
     model.train()
     loss_ema = None
+
     for epoch in range(nb_epoch):
         for batch_idx, (image, _) in enumerate(tqdm(dataloader)) :
             image = image.to(device)
@@ -42,18 +43,34 @@ def train_ddpm(model, dataloader, optimizer, device, nb_epoch, path, writer=None
                 loss_ema = loss.item()
             else:
                 loss_ema = 0.9 * loss_ema + 0.1 * loss.item()
+            
+            if writer is not None:
+                writer.add_scalar("BaseDDPM/Loss", loss_ema, epoch)
+
             optimizer.step()
 
-        model.eval()
-        # with torch.no_grad():
-        #     # xh = ddpm.sample(16, (1, 28, 28), device)
-        #     xh = ddpm.sample(16, (3, 32, 32), device)
-        #     grid = make_grid(xh, nrow=4, normalize=True)
-        #     save_image(grid, f"./bin/ddpm_sample_{i}.png")
+        print(f"Epoch [{epoch}/{nb_epoch}]\
+               Loss: {loss_ema:.4f}"
+        )
+        if writer is not None : # and epoch % 5 == 0 :
+            # model.eval()
+            with torch.no_grad() :
+                samples = model.sample(4, (3, 32, 32), device)
+                grid = torchvision.utils.make_grid(samples, nrow=4, normalize=True)
+                writer.add_image("BaseDDPM/Samples", grid, epoch)
 
-        #     # save model
-        #     torch.save(ddpm.state_dict(), f"./ddpm_mnist.pth")
+    # Save model
+    torch.save(model.state_dict(), path)
 
 
 if __name__ == "__main__":
-    train_ddpm(n_epoch=10, device="cpu")
+    writer = SummaryWriter(log_dir="./logs/base_ddpm_v0")
+    train_ddpm(
+        model=ddpm,
+        dataloader=dataloader,
+        optimizer=optim,
+        device=DEVICE,
+        nb_epoch=10,
+        path="./bin/ddpm_cifar10.pth",
+        writer=writer,
+    )

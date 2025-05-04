@@ -40,35 +40,46 @@ def ddpm_schedules(beta1: float, beta2: float, T: int) -> Dict[str, torch.Tensor
     }
 
 
-blk = lambda ic, oc: nn.Sequential(
-    nn.Conv2d(ic, oc, 7, padding=3),
-    nn.BatchNorm2d(oc),
-    nn.LeakyReLU(),
-)
-
-
-class DummyEpsModel(nn.Module):
-    """
-    This should be unet-like, but let's don't think about the model too much :P
-    Basically, any universal R^n -> R^n model should work.
-    """
-
-    def __init__(self, n_channel: int) -> None:
-        super(DummyEpsModel, self).__init__()
+class DummyEpsModel(nn.Module) :
+    def __init__(self, n_channel, time_dim) :
+        super().__init__()
+        self.n_channel = n_channel
+        self.time_dim = time_dim
         self.conv = nn.Sequential(  # with batchnorm
-            blk(n_channel, 64),
-            blk(64, 128),
-            blk(128, 256),
-            blk(256, 512),
-            blk(512, 256),
-            blk(256, 128),
-            blk(128, 64),
+            self._block(n_channel, 64),
+            self._block(64, 128),
+            self._block(128, 256),
+            self._block(256, 512),
+            self._block(512, 256),
+            self._block(256, 128),
+            self._block(128, 64),
             nn.Conv2d(64, n_channel, 3, padding=1),
         )
+        self.emb_proj = nn.Linear(time_dim, n_channel)
+
+    def _block(self, in_channels, out_channels) :
+        return nn.Sequential(
+            nn.Conv2d(in_channels, out_channels, kernel_size=7, padding=3),
+            nn.BatchNorm2d(out_channels),
+            nn.LeakyReLU(),
+        )
+    
+    def positional_embedding(self, t, channels) :
+        inv_freq = 1.0 / (10000 ** (torch.arange(0, channels, 2, device=t.device).float() / channels))
+        pos_enc = torch.cat([
+            torch.sin(t * inv_freq),
+            torch.cos(t * inv_freq)
+        ], dim=-1)
+        return pos_enc
 
     def forward(self, x, t) -> torch.Tensor:
         # Lets think about using t later. In the paper, they used Tr-like positional embeddings.
-        return self.conv(x)
+        # t = t.unsqueeze(-1).float()
+        # t = self.pos_encoding(t, self.time_dim)
+        # emb = self.emb_proj(t)[:, :, None, None].repeat(1, 1, x.shape[-2], x.shape[-1]) #.expand_as(x)
+        x = self.conv(x)
+        # x = x + emb
+        return x
 
 
 class DDPM(nn.Module):
