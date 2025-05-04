@@ -44,7 +44,7 @@ transforms = transforms.Compose(
     ]
 )
 
-dataset = BaseCIFAR10(root="data/", train=True, transform=transforms, subset_size=10000) # added
+dataset = BaseCIFAR10(root="data/", train=True, transform=transforms, subset_size=5000) # added
 # dataset = datasets.MNIST(root="data/", transform=transforms, download=True)
 #comment mnist and uncomment below if you want to train on CelebA dataset
 #dataset = datasets.ImageFolder(root="celeb_dataset", transform=transforms)
@@ -70,7 +70,8 @@ opt_critic = optim.Adam(critic.parameters(), lr=gan_hparams["learning_rate"])
 # fixed_noise = torch.randn(32, Z_DIM, 1, 1).to(DEVICE)
 # writer_real = SummaryWriter(f"logs/real")
 # writer_fake = SummaryWriter(f"logs/fake")
-writer = SummaryWriter(log_dir="logs/base_gan_v0")
+gan_writer = SummaryWriter(log_dir="./logs/base_gan_v0")
+gan_writer.add_hparams(gan_hparams, {})
 # step = 0
 
 # gen.train()
@@ -140,6 +141,7 @@ def train_gan(generator, critic, dataloader, generator_optimizer, critic_optimiz
     generator.train()
     critic.train()
     step = 0
+    fixed_noise = torch.randn(8, generator.latent_dim, 1, 1).to(device)
     for epoch in range(nb_epochs):
         for batch_idx, (image, _) in enumerate(tqdm(dataloader)):
             image = image.to(device)
@@ -148,7 +150,7 @@ def train_gan(generator, critic, dataloader, generator_optimizer, critic_optimiz
             # Train Critic: max (E[critic(real)] - E[critic(fake)]) <-> min -(E[critic(real)] - E[critic(fake)])
             for _ in range(nb_critic_itr):
                 noise = torch.randn(batch_size, generator.latent_dim, 1, 1).to(device)
-                fake = generator(noise)
+                fake = generator(noise) # with torch.no_grad() may be better
                 critic_real = critic(image).reshape(-1)
                 critic_fake = critic(fake).reshape(-1)
                 loss_critic = -(torch.mean(critic_real) - torch.mean(critic_fake))
@@ -168,29 +170,35 @@ def train_gan(generator, critic, dataloader, generator_optimizer, critic_optimiz
             loss_generator.backward()
             generator_optimizer.step()
 
+            # Logging
+            if writer is not None :
+                # generator.eval()
+                # critic.eval()
+                writer.add_scalar("BaseGAN/Critic_Loss", loss_critic.item(), global_step=step)
+                writer.add_scalar("BaseGAN/Generator_Loss", loss_generator.item(), global_step=step)
+                # writer.add_scalar("BaseGAN/Real_Score", critic_real.mean().item(), global_step=step)
+                # writer.add_scalar("BaseGAN/Fake_Score", critic_fake.mean().item(), global_step=step)
+                wasserstein_distance = critic_real.mean() - critic_fake.mean()
+                writer.add_scalar("BaseGAN/Wasserstein_Distance", wasserstein_distance.item(), global_step=step)
+
+
             step += 1
             generator.train()
             critic.train()
 
         # Logging
-        if epoch % 5 == 0 :
-            generator.eval()
-            critic.eval()
-            print(
-                f"Epoch [{epoch}/{nb_epochs}]\
-                Loss Critic: {loss_critic:.4f}, Loss Generator: {loss_generator:.4f}"
-            )
-            if writer :
-                writer.add_scalar("Loss/Critic", loss_critic, global_step=step)
-                writer.add_scalar("Loss/Generator", loss_generator, global_step=step)
-                writer.add_scalar("Scores/Real", critic_real.mean().item(), global_step=step)
-                writer.add_scalar("Scores/Fake", critic_fake.mean().item(), global_step=step)
-                wasserstein_distance = critic_real.mean() - critic_fake.mean()
-                writer.add_scalar("Distance/Wasserstein", wasserstein_distance.item(), global_step=step)
+        print(
+            f"Epoch [{epoch}/{nb_epochs}]\
+            Loss Critic: {loss_critic:.4f}, Loss Generator: {loss_generator:.4f}"
+        )
+        if writer is not None and epoch % 5 == 0 :
+            with torch.no_grad():
+                samples = generator(fixed_noise)
+                grid = torchvision.utils.make_grid(samples, normalize=True)
+                writer.add_image("BaseGAN/Samples", grid, global_step=step)
 
-                with torch.no_grad():
-                    samples = torchvision.utils.make_grid(fake[:8], normalize=True)
-                    writer.add_image("GAN Samples", samples, global_step=step)
+    # Save model
+    torch.save(generator.state_dict(), path)
 
 
 
@@ -202,8 +210,8 @@ train_gan(
         critic_optimizer=opt_critic,
         device=DEVICE,
         nb_epochs=gan_hparams["nb_epochs"],
-        path="models/base_gan.pth",
+        path="weights/base_gan_v0.pth",
         nb_critic_itr=gan_hparams["nb_critic_itr"],
         weight_clip=gan_hparams["weight_clip"],
-        writer=None
+        writer=gan_writer
 )

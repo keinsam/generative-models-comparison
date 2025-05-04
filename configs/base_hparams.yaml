@@ -22,8 +22,8 @@ gan :
   # out_channels : 3
   latent_dim : 128
   weight_clip : 0.01
-  nb_critic_itr : 5
+  nb_critic_itr : 5 
   # Train hyperparameters
   batch_size : 16
-  nb_epochs : 20
+  nb_epochs : 100
   learning_rate : 0.0003
