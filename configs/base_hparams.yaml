@@ -9,16 +9,21 @@ ddpm :
   time_dim : 128 # 256 in original paper
   # Train hyperparameters
   batch_size : 16 # works with 12
-  nb_epochs : 20
-  learning_rate : 0.0005 # works with 0.0003
+  nb_epochs : 200
+  learning_rate : 0.0003 # works with 0.0003
 
 gan :
   # Model hyperparameters
-  img_size : 32
-  in_channels : 3
-  out_channels : 3
+  # img_size : 32
+  channels_img : 3
+  features_g : 64
+  features_d : 64
+  # in_channels : 3
+  # out_channels : 3
   latent_dim : 128
+  weight_clip : 0.01
+  nb_critic_itr : 5
   # Train hyperparameters
-  batch_size : 64
+  batch_size : 16
   nb_epochs : 20
   learning_rate : 0.0003
