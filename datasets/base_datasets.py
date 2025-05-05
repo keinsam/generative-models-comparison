@@ -9,7 +9,7 @@ class BaseCIFAR10(Dataset) :
         self.data = datasets.CIFAR10(root=root, train=train, download=download)
         self.transform = transform
         if subset_size is not None :
-            self.data = torch.utils.data.Subset(self.data, range(subset_size))
+            self.data = Subset(self.data, range(subset_size))
 
     def __len__(self) :
         return len(self.data)
