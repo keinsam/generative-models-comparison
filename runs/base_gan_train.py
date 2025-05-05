@@ -10,13 +10,12 @@ from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 import torchvision
 import torchvision.transforms as transforms
-from models.base_gan_models import Discriminator, Generator, initialize_weights
+from models.base_gan_models import BaseCritic, BaseGenerator, initialize_weights
 from datasets.base_datasets import BaseCIFAR10
 
 
 with open("configs/base_hparams.yaml", "r") as f :
     hparams = yaml.safe_load(f)
-# ddpm_hparams = hparams["ddpm"]
 gan_hparams = hparams["gan"]
 
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
@@ -25,20 +24,17 @@ transforms = transforms.Compose(
     [
         transforms.ToTensor(),
         transforms.Normalize(
-            [0.5 for _ in range(gan_hparams["channels_img"])], [0.5 for _ in range(gan_hparams["channels_img"])]
+            [0.5 for _ in range(gan_hparams["img_channels"])], [0.5 for _ in range(gan_hparams["img_channels"])]
         ),
     ]
 )
 
-dataset = BaseCIFAR10(root="data/", train=True, download=False, transform=transforms, subset_size=5000)
+dataset = BaseCIFAR10(root="data/", train=True, download=False, transform=transforms, subset_size=1000)
 dataloader = DataLoader(dataset, batch_size=gan_hparams["batch_size"], shuffle=True)
 
 
-generator = Generator(gan_hparams["latent_dim"],
-                gan_hparams["channels_img"],
-                gan_hparams["features_g"]).to(DEVICE)
-critic = Discriminator(gan_hparams["channels_img"],
-                        gan_hparams["features_d"]).to(DEVICE)
+generator = BaseGenerator(gan_hparams["latent_dim"], gan_hparams["img_channels"]).to(DEVICE)
+critic = BaseCritic(gan_hparams["img_channels"]).to(DEVICE)
 
 initialize_weights(generator)
 initialize_weights(critic)

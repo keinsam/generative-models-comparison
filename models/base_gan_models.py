@@ -1,21 +1,20 @@
 import torch
 import torch.nn as nn
 
-class Discriminator(nn.Module):
-    def __init__(self, channels_img, features_d):
-        super(Discriminator, self).__init__()
-        self.channels_img = channels_img
-        self.features_d = features_d
-        self.disc = nn.Sequential(
+class BaseCritic(nn.Module):
+    def __init__(self, img_channels):
+        super(BaseCritic, self).__init__()
+        self.img_channels = img_channels
+        self.net = nn.Sequential(
             # input: N x channels_img x 64 x 64
-            nn.Conv2d(channels_img, features_d, kernel_size=4, stride=2, padding=1),
+            nn.Conv2d(img_channels, 64, kernel_size=4, stride=2, padding=1),
             nn.LeakyReLU(0.2),
             # _block(in_channels, out_channels, kernel_size, stride, padding)
-            self._block(features_d, features_d * 2, 4, 2, 1),
-            self._block(features_d * 2, features_d * 4, 4, 2, 1),
-            # self._block(features_d * 4, features_d * 8, 4, 2, 1),
+            self._block(64, 128, 4, 2, 1),
+            self._block(128, 256, 4, 2, 1),
+            # self._block(256, 512, 4, 2, 1),
             # After all _block img output is 4x4 (Conv2d below makes into 1x1)
-            nn.Conv2d(features_d * 4, 1, kernel_size=4, stride=2, padding=0),
+            nn.Conv2d(256, 1, kernel_size=4, stride=2, padding=0),
         )
 
     def _block(self, in_channels, out_channels, kernel_size, stride, padding):
@@ -26,22 +25,21 @@ class Discriminator(nn.Module):
         )
 
     def forward(self, x):
-        return self.disc(x)
+        return self.net(x)
 
 
-class Generator(nn.Module):
-    def __init__(self, latent_dim, channels_img, features_g):
-        super(Generator, self).__init__()
+class BaseGenerator(nn.Module):
+    def __init__(self, latent_dim, img_channels):
+        super(BaseGenerator, self).__init__()
         self.latent_dim = latent_dim
-        self.channels_img = channels_img
-        self.features_g = features_g
+        self.img_channels = img_channels
         self.net = nn.Sequential(
             # Input: N x latent_dim x 1 x 1
-            self._block(latent_dim, features_g * 8, 4, 1, 0),  # img: 4x4
+            self._block(latent_dim, 512, 4, 1, 0),  # img: 4x4
             # self._block(features_g * 16, features_g * 8, 4, 2, 1),  # img: 8x8
-            self._block(features_g * 8, features_g * 4, 4, 2, 1),  # img: 16x16
-            self._block(features_g * 4, features_g * 2, 4, 2, 1),  # img: 32x32
-            nn.ConvTranspose2d(features_g * 2, channels_img, kernel_size=4, stride=2, padding=1),
+            self._block(512, 256, 4, 2, 1),  # img: 16x16
+            self._block(256, 128, 4, 2, 1),  # img: 32x32
+            nn.ConvTranspose2d(128, img_channels, kernel_size=4, stride=2, padding=1),
             # Output: N x channels_img x 64 x 64
             nn.Tanh(),
         )
