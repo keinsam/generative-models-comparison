@@ -1,5 +1,4 @@
 import torch
-from torch.utils.data import Dataset
 from base_datasets import BaseCIFAR10
 
 class DenoisingCIFAR10(BaseCIFAR10) :
