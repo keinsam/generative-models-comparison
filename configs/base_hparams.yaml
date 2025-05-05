@@ -1,14 +1,14 @@
 ddpm :
   # Model hyperparameters
-  noise_steps : 250 # 1000 in original paper
+  noise_steps : 500 # 1000 in original paper
   beta_start : 0.0001
   beta_end : 0.02
   img_size : 32
   img_channels : 3
   time_dim : 128 # 256 in original paper
   # Train hyperparameters
-  batch_size : 2 # 16
-  nb_epochs : 100
+  batch_size : 16 # 16
+  nb_epochs : 500
   learning_rate : 0.0003 # works with 0.0003
 
 gan :
