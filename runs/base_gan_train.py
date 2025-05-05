@@ -30,7 +30,7 @@ transforms = transforms.Compose(
     ]
 )
 
-dataset = BaseCIFAR10(root="data/", train=True, transform=transforms, subset_size=5000)
+dataset = BaseCIFAR10(root="data/", train=True, download=False, transform=transforms, subset_size=5000)
 dataloader = DataLoader(dataset, batch_size=gan_hparams["batch_size"], shuffle=True)
 
 
