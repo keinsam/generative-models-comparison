@@ -50,11 +50,10 @@ writer = SummaryWriter(log_dir="./logs/outpainting_gan_v1")
 writer.add_hparams(gan_hparams, {})
 
 
-fixed_real_images, fixed_masked_images, fixed_masks = next(iter(dataloader))
-fixed_masks = fixed_masks[:8].to(DEVICE)
-fixed_real_images = fixed_real_images[:8].to(DEVICE)
+fixed_masked_images, fixed_real_images, fixed_masks = next(iter(dataloader))
 fixed_masked_images = fixed_masked_images[:8].to(DEVICE)
-
+fixed_real_images = fixed_real_images[:8].to(DEVICE)
+fixed_masks = fixed_masks[:8].to(DEVICE)
 
 def train_outpainting_gan(
     generator, 
@@ -77,7 +76,7 @@ def train_outpainting_gan(
     fixed_noise = torch.randn(8, generator.latent_dim, device=device)
     
     for epoch in range(nb_epochs):
-        for batch_idx, (real_images, masked_images, masks) in enumerate(tqdm(dataloader)):
+        for batch_idx, (masked_images, real_images, masks) in enumerate(tqdm(dataloader)):
             real_images = real_images.to(device)
             batch_size = real_images.shape[0]
             

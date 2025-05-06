@@ -23,4 +23,4 @@ class OutpaintingCIFAR10(BaseCIFAR10):
         
         mask = self._create_mask(image)
         masked_image = image * mask
-        return image, masked_image, mask
+        return masked_image, image, mask # input, target, mask
