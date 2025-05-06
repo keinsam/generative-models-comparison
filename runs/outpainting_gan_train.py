@@ -31,8 +31,8 @@ transform = transforms.Compose([
 ])
 
 # Dataset and dataloader
-dataset = OutpaintingCIFAR10(root="data/", train=True, download=False, transform=transform, subset_size=10000, visible_ratio=0.75)
-dataloader = DataLoader(dataset, batch_size=gan_hparams["batch_size"], shuffle=True)
+dataset = OutpaintingCIFAR10(root="data/", train=True, download=False, transform=transform, subset_size=1000, visible_ratio=0.75)
+dataloader = DataLoader(dataset, batch_size=gan_hparams["batch_size"], shuffle=False)
 
 # Models
 generator = OutpaintingGenerator(gan_hparams["latent_dim"], gan_hparams["img_channels"]).to(DEVICE)
@@ -49,12 +49,18 @@ critic_optimizer = optim.Adam(critic.parameters(), lr=gan_hparams["learning_rate
 writer = SummaryWriter(log_dir="./logs/outpainting_gan_v1")
 writer.add_hparams(gan_hparams, {})
 
-def create_mask(batch_size, channels, height, width, mask_ratio=0.25, device="cuda"):
-    """Create a mask that keeps left 25% of the image"""
-    mask = torch.zeros((batch_size, channels, height, width), device=device)
-    mask_width = int(width * mask_ratio)
-    mask[:, :, :, :mask_width] = 1
-    return mask
+# def create_mask(batch_size, channels, height, width, mask_ratio=0.25, device="cuda"):
+#     mask = torch.zeros((batch_size, channels, height, width), device=device)
+#     mask_width = int(width * mask_ratio)
+#     mask[:, :, :, :mask_width] = 1
+#     return mask
+    
+
+fixed_real_images, fixed_masked_images, fixed_masks = next(iter(dataloader))
+fixed_masks = fixed_masks[:8].to(DEVICE)
+fixed_real_images = fixed_real_images[:8].to(DEVICE)
+fixed_masked_images = fixed_masked_images[:8].to(DEVICE)
+
 
 def train_outpainting_gan(
     generator, 
@@ -77,19 +83,19 @@ def train_outpainting_gan(
     fixed_noise = torch.randn(8, generator.latent_dim, device=device)
     
     for epoch in range(nb_epochs):
-        for batch_idx, (real_images, _) in enumerate(tqdm(dataloader)):
+        for batch_idx, (real_images, masked_images, masks) in enumerate(tqdm(dataloader)):
             real_images = real_images.to(device)
             batch_size = real_images.shape[0]
             
-            # Create masks (keep left 25%)
-            masks = create_mask(
-                batch_size, 
-                gan_hparams["img_channels"], 
-                real_images.shape[2], 
-                real_images.shape[3], 
-                device=device
-            )
-            masked_images = real_images * masks
+            # # Create masks (keep left 25%)
+            # masks = create_mask(
+            #     batch_size, 
+            #     gan_hparams["img_channels"], 
+            #     real_images.shape[2], 
+            #     real_images.shape[3], 
+            #     device=device
+            # )
+            # masked_images = real_images * masks
             
             # Train Critic
             critic_losses = []
@@ -138,27 +144,33 @@ def train_outpainting_gan(
                 writer.add_scalar("OutpaintingGAN/Wasserstein_Distance", wasserstein_distance.item(), global_step=step)
                 
                 # Visualize samples periodically
+                # Replace the visualization part in the training loop with this:
                 if step % 5 == 0:
                     with torch.no_grad():
-                        # Generate samples
-                        fixed_masked = real_images[:8] * masks[:8]
-                        samples = generator(fixed_noise, fixed_masked)
-                        completed_samples = samples * (1 - masks[:8]) + fixed_masked * masks[:8]
-                        
-                        # Create comparison grid - simplified approach
-                        grid_input = fixed_masked  # Already has 3 channels
-                        grid_output = completed_samples
-                        grid_real = real_images[:8]
-                        
-                        # Stack images vertically: masked input | generated output | real image
-                        grid = torch.cat([grid_input, grid_output, grid_real], dim=0)
-                        
-                        # Normalize to [0, 1] range
-                        grid = (grid + 1) / 2  # Assuming tanh output (-1 to 1)
-                        
-                        # Make grid with 3 rows (input, output, real) and 8 columns
-                        grid = torchvision.utils.make_grid(grid, nrow=8, normalize=False)
+                        samples = generator(fixed_noise, fixed_masked_images)
+                        completed_samples = samples * (1 - fixed_masks) + fixed_masked_images * fixed_masks
+
+                        grid_input = torchvision.utils.make_grid(fixed_masked_images, nrow=8, normalize=True)
+                        grid_output = torchvision.utils.make_grid(completed_samples, nrow=8, normalize=True)
+                        grid_real = torchvision.utils.make_grid(fixed_real_images, nrow=8, normalize=True)
+                        grid = torch.cat([grid_input, grid_output, grid_real], dim=1)
+
                         writer.add_image("OutpaintingGAN/Samples", grid, global_step=step)
+
+                    # with torch.no_grad():
+                    #     # Generate samples
+                    #     fixed_masked = real_images[:8] * masks[:8]
+                    #     samples = generator(fixed_noise, fixed_masked)
+                    #     completed_samples = samples * (1 - masks[:8]) + fixed_masked * masks[:8]
+                        
+                    #     # Create separate grids for each type
+                    #     grid_input = torchvision.utils.make_grid(fixed_masked, nrow=8, normalize=True)
+                    #     grid_output = torchvision.utils.make_grid(completed_samples, nrow=8, normalize=True)
+                    #     grid_real = torchvision.utils.make_grid(real_images[:8], nrow=8, normalize=True)
+                        
+                    #     # Stack vertically
+                    #     grid = torch.cat([grid_input, grid_output, grid_real], dim=1)
+                    #     writer.add_image("OutpaintingGAN/Samples", grid, global_step=step)
             
             step += 1
         
