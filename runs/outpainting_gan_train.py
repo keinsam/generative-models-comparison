@@ -31,7 +31,7 @@ transform = transforms.Compose([
 ])
 
 # Dataset and dataloader
-dataset = OutpaintingCIFAR10(root="data/", train=True, download=False, transform=transform, subset_size=1000, visible_ratio=0.75)
+dataset = OutpaintingCIFAR10(root="data/", train=True, download=False, transform=transform, subset_size=10000, visible_ratio=0.75)
 dataloader = DataLoader(dataset, batch_size=gan_hparams["batch_size"], shuffle=False)
 
 # Models
@@ -49,12 +49,6 @@ critic_optimizer = optim.Adam(critic.parameters(), lr=gan_hparams["learning_rate
 writer = SummaryWriter(log_dir="./logs/outpainting_gan_v1")
 writer.add_hparams(gan_hparams, {})
 
-# def create_mask(batch_size, channels, height, width, mask_ratio=0.25, device="cuda"):
-#     mask = torch.zeros((batch_size, channels, height, width), device=device)
-#     mask_width = int(width * mask_ratio)
-#     mask[:, :, :, :mask_width] = 1
-#     return mask
-    
 
 fixed_real_images, fixed_masked_images, fixed_masks = next(iter(dataloader))
 fixed_masks = fixed_masks[:8].to(DEVICE)
@@ -87,16 +81,6 @@ def train_outpainting_gan(
             real_images = real_images.to(device)
             batch_size = real_images.shape[0]
             
-            # # Create masks (keep left 25%)
-            # masks = create_mask(
-            #     batch_size, 
-            #     gan_hparams["img_channels"], 
-            #     real_images.shape[2], 
-            #     real_images.shape[3], 
-            #     device=device
-            # )
-            # masked_images = real_images * masks
-            
             # Train Critic
             critic_losses = []
             for _ in range(nb_critic_itr):
@@ -127,8 +111,12 @@ def train_outpainting_gan(
             noise = torch.randn(batch_size, generator.latent_dim, device=device)
             fake_images = generator(noise, masked_images)
             completed_images = fake_images * (1 - masks) + masked_images * masks
-            
-            generator_loss = -torch.mean(critic(completed_images, masked_images).reshape(-1))
+            # generator_loss = -torch.mean(critic(completed_images, masked_images).reshape(-1))
+            ### Test ###
+            reconstruction_loss = torch.nn.functional.l1_loss(completed_images, real_images)
+            lambda_recon = 100
+            generator_loss = -torch.mean(critic(completed_images, masked_images).reshape(-1)) + lambda_recon * reconstruction_loss
+            #### Test ###
             
             generator.zero_grad()
             generator_loss.backward()
@@ -143,8 +131,6 @@ def train_outpainting_gan(
                 wasserstein_distance = torch.mean(critic_real) - torch.mean(critic_fake)
                 writer.add_scalar("OutpaintingGAN/Wasserstein_Distance", wasserstein_distance.item(), global_step=step)
                 
-                # Visualize samples periodically
-                # Replace the visualization part in the training loop with this:
                 if step % 5 == 0:
                     with torch.no_grad():
                         samples = generator(fixed_noise, fixed_masked_images)
@@ -156,21 +142,6 @@ def train_outpainting_gan(
                         grid = torch.cat([grid_input, grid_output, grid_real], dim=1)
 
                         writer.add_image("OutpaintingGAN/Samples", grid, global_step=step)
-
-                    # with torch.no_grad():
-                    #     # Generate samples
-                    #     fixed_masked = real_images[:8] * masks[:8]
-                    #     samples = generator(fixed_noise, fixed_masked)
-                    #     completed_samples = samples * (1 - masks[:8]) + fixed_masked * masks[:8]
-                        
-                    #     # Create separate grids for each type
-                    #     grid_input = torchvision.utils.make_grid(fixed_masked, nrow=8, normalize=True)
-                    #     grid_output = torchvision.utils.make_grid(completed_samples, nrow=8, normalize=True)
-                    #     grid_real = torchvision.utils.make_grid(real_images[:8], nrow=8, normalize=True)
-                        
-                    #     # Stack vertically
-                    #     grid = torch.cat([grid_input, grid_output, grid_real], dim=1)
-                    #     writer.add_image("OutpaintingGAN/Samples", grid, global_step=step)
             
             step += 1
         
