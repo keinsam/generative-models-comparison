@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 from models.base_gan_models import BaseCritic, BaseGenerator
+from models.base_ddpm_models import DDPM, UNetEpsilon
 
 class OutpaintingCritic(BaseCritic):
     def __init__(self, img_channels):
@@ -44,3 +45,145 @@ class OutpaintingGenerator(BaseGenerator):
         x = x.unsqueeze(-1).unsqueeze(-1)  # Add spatial dimensions
         
         return self.net(x)
+
+# class OutpaintingDDPM(DDPM):
+#     def __init__(
+#         self,
+#         eps_model,
+#         betas,
+#         n_T,
+#         criterion,
+#         mask_value: float = 0.0,
+#         ):
+#         super().__init__(eps_model, betas, n_T, criterion)
+#         self.mask_value = mask_value 
+
+#     def forward(self, x: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:
+#         _ts = torch.randint(1, self.n_T, (x.shape[0],), device=x.device)
+#         eps = torch.randn_like(x)
+
+#         x_t = (
+#             self.sqrtab[_ts, None, None, None] * x
+#             + self.sqrtmab[_ts, None, None, None] * eps
+#         )
+
+#         x_t = mask * x + (1 - mask) * x_t
+
+#         pred_eps = self.eps_model(x_t, _ts / self.n_T)
+#         loss = self.criterion(eps, pred_eps)
+#         return loss
+
+#     @torch.no_grad()
+#     def sample(self, x_start: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:
+#         x_i = torch.randn_like(x_start).to(x_start.device)
+#         x_i = mask * x_start + (1 - mask) * x_i
+
+#         for i in range(self.n_T, 0, -1):
+#             t = torch.full((x_i.size(0),), i, device=x_i.device, dtype=torch.long)
+#             eps = self.eps_model(x_i, t)
+
+#             x_i = self.oneover_sqrta[i] * (x_i - eps * self.mab_over_sqrtmab[i])
+#             if i > 1:
+#                 z = torch.randn_like(x_i)
+#                 x_i += self.sqrt_beta_t[i] * z
+#             x_i = mask * x_start + (1 - mask) * x_i
+
+#         return x_i
+
+# class OutpaintingUNetEpsilon(UNetEpsilon):
+#     def __init__(self, n_channel, time_dim):
+#         super().__init__(n_channel, time_dim)
+#         # Adjust the input layer to handle [image, mask] concatenation
+#         self.init_conv= nn.Conv2d(n_channel * 2, 64, kernel_size=3, padding=1)
+        
+#     def forward(self, x: torch.Tensor, t: torch.Tensor) -> torch.Tensor:
+#         x = torch.cat([x, t], dim=1)
+#         return super().forward(x)
+
+class OutpaintingDDPM(DDPM):
+    def __init__(
+        self,
+        eps_model,
+        betas,
+        n_T,
+        criterion=nn.MSELoss(),
+    ):
+        super().__init__(eps_model, betas, n_T, criterion)
+
+    def forward(self, x: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:
+        """
+        x: original image (3 channels)
+        mask: binary mask (3 channels, same across channels)
+        """
+        # Convert RGB mask to single channel by taking first channel
+        mask_single = mask[:, 0:1, :, :]  # [B, 1, H, W]
+        
+        _ts = torch.randint(1, self.n_T, (x.shape[0],), device=x.device)
+        eps = torch.randn_like(x)  # [B, 3, H, W]
+
+        # Create noisy version
+        x_t = (
+            self.sqrtab[_ts, None, None, None] * x
+            + self.sqrtmab[_ts, None, None, None] * eps
+        )
+
+        # Apply mask - known regions remain original, unknown get noisy version
+        x_t = mask * x + (1 - mask) * x_t
+
+        # Predict noise for the entire image
+        # Concatenate single-channel mask (not RGB mask)
+        pred_eps = self.eps_model(torch.cat([x_t, mask_single], dim=1), _ts / self.n_T)
+        
+        # Ensure pred_eps has same channels as eps (3)
+        pred_eps = pred_eps[:, :3, :, :]  # Take first 3 channels
+        
+        # Only compute loss on unknown regions (using single-channel mask)
+        # Broadcast mask_single to match eps channels
+        mask_broadcast = mask_single.expand_as(eps)
+        loss = self.criterion(eps * (1 - mask_broadcast), pred_eps * (1 - mask_broadcast))
+        return loss
+
+    @torch.no_grad()
+    def sample(self, x_start: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:
+        """
+        x_start: masked image (3 channels)
+        mask: binary mask (3 channels)
+        """
+        # Convert RGB mask to single channel
+        mask_single = mask[:, 0:1, :, :]  # [B, 1, H, W]
+        
+        # Start from random noise
+        x_i = torch.randn_like(x_start).to(x_start.device)
+        # Apply mask immediately to preserve known regions
+        x_i = mask * x_start + (1 - mask) * x_i
+
+        for i in range(self.n_T, 0, -1):
+            t = torch.full((x_i.size(0),), i, device=x_i.device, dtype=torch.long)
+            # Concatenate single-channel mask
+            eps = self.eps_model(torch.cat([x_i, mask_single], dim=1), t)
+            
+            # Take only first 3 channels (in case model outputs extra channels)
+            eps = eps[:, :3, :, :]
+            
+            # Update only the unknown regions
+            x_i_unknown = self.oneover_sqrta[i] * (x_i - eps * self.mab_over_sqrtmab[i])
+            if i > 1:
+                z = torch.randn_like(x_i)
+                x_i_unknown += self.sqrt_beta_t[i] * z
+            
+            # Combine known and unknown regions
+            x_i = mask * x_start + (1 - mask) * x_i_unknown
+
+        return x_i
+
+
+class OutpaintingUNetEpsilon(UNetEpsilon):
+    def __init__(self, n_channel, time_dim):
+        # Input channels = image channels (3) + mask channel (1)
+        super().__init__(n_channel + 1, time_dim)  # +1 for single-channel mask
+        # Modify final layer to output n_channel (3) instead of n_channel+1
+        self.final_conv = nn.Conv2d(64, n_channel, kernel_size=3, padding=1)
+        
+    def forward(self, x: torch.Tensor, t: torch.Tensor) -> torch.Tensor:
+        # x contains concatenated [image, mask]
+        return super().forward(x, t)
