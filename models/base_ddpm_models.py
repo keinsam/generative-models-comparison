@@ -32,7 +32,7 @@ def ddpm_schedules(beta1: float, beta2: float, T: int) -> Dict[str, torch.Tensor
     }
 
 
-class UNetEpsModel(nn.Module):
+class UNetEpsilon(nn.Module):
     def __init__(self, n_channel, time_dim):
         super().__init__()
         self.n_channel = n_channel
