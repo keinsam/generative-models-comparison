@@ -112,11 +112,9 @@ def train_outpainting_gan(
             fake_images = generator(noise, masked_images)
             completed_images = fake_images * (1 - masks) + masked_images * masks
             # generator_loss = -torch.mean(critic(completed_images, masked_images).reshape(-1))
-            ### Test ###
             reconstruction_loss = torch.nn.functional.l1_loss(completed_images, real_images)
-            lambda_recon = 100
+            lambda_recon = gan_hparams["lambda_recon"]
             generator_loss = -torch.mean(critic(completed_images, masked_images).reshape(-1)) + lambda_recon * reconstruction_loss
-            #### Test ###
             
             generator.zero_grad()
             generator_loss.backward()

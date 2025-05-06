@@ -44,36 +44,3 @@ class OutpaintingGenerator(BaseGenerator):
         x = x.unsqueeze(-1).unsqueeze(-1)  # Add spatial dimensions
         
         return self.net(x)
-
-# class OutpaintingGenerator(BaseGenerator):
-#     def __init__(self, latent_dim, img_channels):
-#         super().__init__(latent_dim, img_channels)
-        
-#         # Additional processing for conditional generation
-#         self.mask_projection = nn.Sequential(
-#             nn.Conv2d(img_channels, 64, kernel_size=3, padding=1),
-#             nn.BatchNorm2d(64),
-#             nn.ReLU()
-#         )
-        
-#         # Modify first block to accept concatenated inputs
-#         original_first = self.net[0]
-#         self.net[0] = self._block(
-#             latent_dim + 64,  # Now accepts noise + mask features
-#             original_first[0].out_channels,
-#             original_first[0].kernel_size,
-#             original_first[0].stride,
-#             original_first[0].padding
-#         )
-        
-#     def forward(self, noise, masked_x):
-#         # Process masked input
-#         mask_features = self.mask_projection(masked_x)
-        
-#         # Reshape noise to spatial dimensions and concatenate
-#         noise = noise.view(noise.size(0), -1, 1, 1)
-#         noise = noise.expand(-1, -1, mask_features.size(2), mask_features.size(3))
-        
-#         # Combine inputs
-#         x = torch.cat([noise, mask_features], dim=1)
-#         return super().forward(x)

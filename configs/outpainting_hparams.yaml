@@ -5,7 +5,8 @@ gan :
   latent_dim : 128
   weight_clip : 0.01
   nb_critic_itr : 3
+  lambda_recon : 20
   # Train hyperparameters
-  batch_size : 64
+  batch_size : 128
   nb_epochs : 100
   learning_rate : 0.0003
