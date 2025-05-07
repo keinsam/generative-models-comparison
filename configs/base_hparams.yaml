@@ -7,8 +7,8 @@ ddpm :
   img_channels : 1 # 3
   time_dim : 128 # 256 in original paper
   # Train hyperparameters
-  batch_size : 128 # 16
-  nb_epochs : 500
+  batch_size : 16
+  nb_epochs : 100
   learning_rate : 0.0003 # works with 0.0003
 
 gan :

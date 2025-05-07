@@ -1,6 +1,6 @@
 import os
 import sys
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
 
 import yaml
 from tqdm import tqdm
@@ -13,6 +13,17 @@ import torchvision.transforms as transforms
 from models.base_gan_models import initialize_weights
 from datasets.outpainting_datasets import OutpaintingCIFAR10
 from models.outpainting_models import OutpaintingGenerator, OutpaintingCritic
+
+# with open("configs/paths.yaml", "r") as f :
+#     paths = yaml.safe_load(f)
+# DDPM_MODEL_NAME = Path(paths["base_ddpm_name"])
+# GAN_MODEL_NAME = Path(paths["base_gan_name"])
+# LOG_DIR = Path(paths["log_dir"])
+# WEIGHTS_DIR = Path(paths["weight_dir"])
+# DDPM_MODEL_PATH = WEIGHTS_DIR.joinpath(f"{DDPM_MODEL_NAME}.pth")
+# GAN_MODEL_PATH = WEIGHTS_DIR.joinpath(f"{GAN_MODEL_NAME}.pth")
+# LOG_DIR.mkdir(parents=True, exist_ok=True)
+# WEIGHTS_DIR.mkdir(parents=True, exist_ok=True)
 
 # Load hyperparameters
 with open("configs/outpainting_hparams.yaml", "r") as f:
@@ -43,8 +54,8 @@ initialize_weights(generator)
 initialize_weights(critic)
 
 # Optimizers
-generator_optimizer = optim.Adam(generator.parameters(), lr=gan_hparams["learning_rate"])
-critic_optimizer = optim.Adam(critic.parameters(), lr=gan_hparams["learning_rate"])
+generator_optimizer = optim.Adam(generator.parameters(), lr=gan_hparams["generator_learning_rate"])
+critic_optimizer = optim.Adam(critic.parameters(), lr=gan_hparams["critic_learning_rate"])
 
 # Tensorboard
 writer = SummaryWriter(log_dir=f"./logs/{MODEL_NAME}")
@@ -129,7 +140,7 @@ def train_outpainting_gan(
                 wasserstein_distance = torch.mean(critic_real) - torch.mean(critic_fake)
                 writer.add_scalar("OutpaintingGAN/Wasserstein_Distance", wasserstein_distance.item(), global_step=step)
                 
-                if step % 5 == 0:
+                if step % 1 == 0:
                     with torch.no_grad():
                         samples = generator(fixed_noise, fixed_masked_images)
                         completed_samples = samples * (1 - fixed_masks) + fixed_masked_images * fixed_masks

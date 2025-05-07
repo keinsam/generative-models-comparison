@@ -53,7 +53,7 @@ class UNetEpsilon(nn.Module):
         self.down2 = self._down_block(128, 256)
         self.down3 = self._down_block(256, 512)
         
-        # Middle
+        # Bottleneck
         self.middle = nn.Sequential(
             self._block(512, 512)
         )
@@ -88,15 +88,9 @@ class UNetEpsilon(nn.Module):
         return nn.Sequential(
             nn.Upsample(scale_factor=2, mode='bilinear', align_corners=True),
             self._block(in_channels, out_channels)
-            # nn.Conv2d(in_channels, out_channels, kernel_size=3, padding=1),
-            # nn.BatchNorm2d(out_channels),
-            # nn.LeakyReLU()
         )
     
     def positional_encoding(self, t, channels):
-        """
-        Enhanced positional encoding for better temporal information
-        """
         inv_freq = 1.0 / (10000 ** (torch.arange(0, channels, 2, device=t.device).float() / channels))
         pos_enc_a = torch.sin(t * inv_freq)
         pos_enc_b = torch.cos(t * inv_freq)
@@ -117,7 +111,7 @@ class UNetEpsilon(nn.Module):
         x3 = self.down2(x2)
         x4 = self.down3(x3)
         
-        # Middle processing with time embedding
+        # Adding time embedding to the bottleneck
         x4 = x4 + t_emb[:, :, None, None].expand(-1, -1, x4.shape[-2], x4.shape[-1])
         x4 = self.middle(x4)
         
@@ -183,8 +177,8 @@ class DDPM(nn.Module):
         for i in range(self.n_T, 0, -1):
             z = torch.randn(n_sample, *size).to(device) if i > 1 else 0
             # eps = self.eps_model(x_i, i / self.n_T)
-            t = torch.full((x_i.size(0),), i, device=x_i.device, dtype=torch.long)     # added
-            eps = self.eps_model(x_i, t)                                               # added
+            t = torch.full((x_i.size(0),), i, device=x_i.device, dtype=torch.long)
+            eps = self.eps_model(x_i, t)    
             x_i = (
                 self.oneover_sqrta[i] * (x_i - eps * self.mab_over_sqrtmab[i])
                 + self.sqrt_beta_t[i] * z

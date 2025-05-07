@@ -4,12 +4,12 @@ ddpm :
   beta_start : 0.0001
   beta_end : 0.02
   img_size : 32
-  img_channels : 3 # 3
+  img_channels : 3
   time_dim : 128 # 256 in original paper
   # Train hyperparameters
-  batch_size : 128 # 16
-  nb_epochs : 100
-  learning_rate : 0.0003 # works with 0.0003
+  batch_size : 16 # 16
+  nb_epochs : 50
+  learning_rate : 0.0003
 
 gan :
   # Model hyperparameters
@@ -18,8 +18,9 @@ gan :
   latent_dim : 128
   weight_clip : 0.01
   nb_critic_itr : 5
-  lambda_recon : 10
+  lambda_recon : 5
   # Train hyperparameters
-  batch_size : 128
+  batch_size : 256
   nb_epochs : 50
-  learning_rate : 0.0003
+  critic_learning_rate : 0.0002
+  generator_learning_rate : 0.0005

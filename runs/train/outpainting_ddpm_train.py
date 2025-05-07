@@ -1,6 +1,6 @@
 import os
 import sys
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
 
 import yaml
 from tqdm import tqdm
@@ -13,13 +13,24 @@ import torchvision.transforms as transforms
 from datasets.outpainting_datasets import OutpaintingCIFAR10
 from models.outpainting_models import OutpaintingDDPM, OutpaintingUNetEpsilon
 
+# with open("configs/paths.yaml", "r") as f :
+#     paths = yaml.safe_load(f)
+# DDPM_MODEL_NAME = Path(paths["base_ddpm_name"])
+# GAN_MODEL_NAME = Path(paths["base_gan_name"])
+# LOG_DIR = Path(paths["log_dir"])
+# WEIGHTS_DIR = Path(paths["weight_dir"])
+# DDPM_MODEL_PATH = WEIGHTS_DIR.joinpath(f"{DDPM_MODEL_NAME}.pth")
+# GAN_MODEL_PATH = WEIGHTS_DIR.joinpath(f"{GAN_MODEL_NAME}.pth")
+# LOG_DIR.mkdir(parents=True, exist_ok=True)
+# WEIGHTS_DIR.mkdir(parents=True, exist_ok=True)
+
 # === Hyperparams ===
 with open("configs/outpainting_hparams.yaml", "r") as f:
     hparams = yaml.safe_load(f)
 ddpm_hparams = hparams["ddpm"]
 
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
-MODEL_NAME = "outpainting_ddpm_v0"
+MODEL_NAME = "outpainting_ddpm_v1"
 
 # === Dataset ===
 transforms = transforms.Compose(
@@ -31,7 +42,7 @@ transforms = transforms.Compose(
         ),
     ]
 )
-dataset = OutpaintingCIFAR10(root="data", train=True, download=False, transform=transforms, subset_size=25000)
+dataset = OutpaintingCIFAR10(root="data", train=True, download=False, transform=transforms, subset_size=10000)
 dataloader = DataLoader(dataset, batch_size=ddpm_hparams["batch_size"], shuffle=True)
 
 # === Model ===
@@ -61,7 +72,7 @@ def train_outpainting_ddpm(model, dataloader, optimizer, device, nb_epoch, path,
             mask = mask.to(device)
 
             optimizer.zero_grad()
-            loss = model(target_image, mask)  # Note: we pass the target image, not masked_image
+            loss = model(target_image, mask)
             loss.backward()
             optimizer.step()
 
@@ -92,7 +103,7 @@ def train_outpainting_ddpm(model, dataloader, optimizer, device, nb_epoch, path,
                 grid = torch.cat([grid_input, grid_output, grid_target], dim=1)
                 
                 writer.add_image("OutpaintingDDPM/Samples", grid, global_step=step)
-                torchvision.utils.save_image(grid, f"./samples/{MODEL_NAME}.png")
+                torchvision.utils.save_image(grid, f"./samples/outpainting/{MODEL_NAME}.png")
 
     torch.save(model.state_dict(), path)
 

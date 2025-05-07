@@ -58,10 +58,6 @@ class OutpaintingDDPM(DDPM):
         super().__init__(eps_model, betas, n_T, criterion)
 
     def forward(self, x: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:
-        """
-        x: original image (3 channels)
-        mask: binary mask (3 channels, same across channels)
-        """
         # Convert RGB mask to single channel by taking first channel
         mask_single = mask[:, 0:1, :, :]  # [B, 1, H, W]
         
@@ -74,14 +70,12 @@ class OutpaintingDDPM(DDPM):
             + self.sqrtmab[_ts, None, None, None] * eps
         )
 
-        # Apply mask - known regions remain original, unknown get noisy version
         x_t = mask * x + (1 - mask) * x_t
 
         # Predict noise for the entire image
         # Concatenate single-channel mask (not RGB mask)
         pred_eps = self.eps_model(torch.cat([x_t, mask_single], dim=1), _ts / self.n_T)
         
-        # Ensure pred_eps has same channels as eps (3)
         pred_eps = pred_eps[:, :3, :, :]  # Take first 3 channels
         
         # Only compute loss on unknown regions (using single-channel mask)
@@ -92,10 +86,6 @@ class OutpaintingDDPM(DDPM):
 
     @torch.no_grad()
     def sample(self, x_start: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:
-        """
-        x_start: masked image (3 channels)
-        mask: binary mask (3 channels)
-        """
         # Convert RGB mask to single channel
         mask_single = mask[:, 0:1, :, :]  # [B, 1, H, W]
         
@@ -109,7 +99,7 @@ class OutpaintingDDPM(DDPM):
             # Concatenate single-channel mask
             eps = self.eps_model(torch.cat([x_i, mask_single], dim=1), t)
             
-            # Take only first 3 channels (in case model outputs extra channels)
+            # Take only first 3 channels
             eps = eps[:, :3, :, :]
             
             # Update only the unknown regions

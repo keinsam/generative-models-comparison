@@ -1,6 +1,6 @@
 import os
 import sys
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
 
 import yaml
 from tqdm import tqdm
@@ -29,7 +29,7 @@ transforms = transforms.Compose(
     ]
 )
 
-dataset = BaseCIFAR10(root="data/", train=True, download=False, transform=transforms, subset_size=1000)
+dataset = BaseCIFAR10(root="data/", train=True, download=False, transform=transforms, subset_size=None)
 dataloader = DataLoader(dataset, batch_size=gan_hparams["batch_size"], shuffle=True)
 
 
@@ -89,15 +89,12 @@ def train_gan(generator, critic, dataloader, generator_optimizer, critic_optimiz
                 # critic.eval()
                 writer.add_scalar("BaseGAN/Critic_Loss", loss_critic.item(), global_step=step)
                 writer.add_scalar("BaseGAN/Generator_Loss", loss_generator.item(), global_step=step)
-                # writer.add_scalar("BaseGAN/Real_Score", critic_real.mean().item(), global_step=step)
-                # writer.add_scalar("BaseGAN/Fake_Score", critic_fake.mean().item(), global_step=step)
                 wasserstein_distance = critic_real.mean() - critic_fake.mean()
                 writer.add_scalar("BaseGAN/Wasserstein_Distance", wasserstein_distance.item(), global_step=step)
 
-
             step += 1
-            generator.train()
-            critic.train()
+            # generator.train()
+            # critic.train()
 
         # Logging
         print(
