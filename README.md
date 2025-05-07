@@ -1,51 +1,55 @@
-# Comparative Review of WGAN and DDPM on multiple tasks
+# Generative Models Comparison: WGAN vs DDPM for Image Restoration
 
-**Goal :** Compare WGAN and DDPM on at least 4 tasks : denoising, upscaling (super-resolution), inpainting, outpainting.
+This repository contains the implementation and experiments comparing Wasserstein Generative Adversarial Networks (WGAN) and Denoising Diffusion Probabilistic Models (DDPM) for three image restoration tasks: inpainting, outpainting, and super-resolution.
 
-**Base :** Basic dataset, the model generates images.
+## Project Structure
 
-**Denoising :** Change the dataset by introducing gaussian or poisson noise, the model has to generate images without the noise.
+```
+.
+├── configs/              # Hyperparameters and paths
+├── data/                 # Datasets
+├── datasets/             # Custom dataset implementations
+├── docs/                 # Project documentation
+├── logs/                 # Training logs (TensorBoard)
+├── models/               # Model implementations
+├── runs/                 # Training and inference scripts
+├── samples/              # Generated output samples
+├── utils/                # Utility functions and metrics
+└── weights/              # Trained model weights
+```
 
-**Upscaling (super-resolution) :** Change the dataset by downsampling images, the model has to generate higher resolution images.
+## Getting Started
 
-**Inpainting :** Change the dataset by introduction random black patches in the images, the model has to generate images with the black patch painted.
+1. Clone the repository:
+   ```bash
+   git clone https://github.com/keinsam/generative-models-comparison.git
+   cd generative-models-comparison
+   ```
 
-**Outpainting :** Change the dataset by introducing a black rectangle around the images, the model has to generate images with the black rectangle painted.
+2. Train a model:
+   ```bash
+   python runs/train/inpainting_ddpm_train.py
+   ```
 
-**TODO :**
-- Implement WGAN and DDPM base model (with same architecture and same number of parameters for fair comparison)
-- Code Dataset for each tasks
-- Check for which tasks the base model needs to be recoded
-- Implement evaluation logic with specialized metrics
+3. Generate samples:
+   ```bash
+   python runs/infer/inpainting_ddpm_infer.py
+   ```
 
+## Configuration
 
-### **TODO List for Fair WGAN vs DDPM Comparison**  
+Modify YAML files in `configs/` to adjust:
+- Model hyperparameters
+- Training parameters
+- Dataset paths
+- Task-specific settings
 
-#### **1. Base Models (Keep Identical Architectures)**  
-- [ ] **WGAN-GP**  
-  - Generator: 4-layer CNN (like DCGAN)  
-  - Discriminator: 4-layer CNN (mirror of Generator)  
-  - **Loss**: Wasserstein
-- [ ] **DDPM**  
-  - **Same 4-layer CNN** as WGAN’s Generator, but:  
-  - Replace final layer with noise prediction  
-  - **Loss**: MSE on noise
+## Results
 
-#### **2. Datasets (For All Tasks)**  
-| Task          | Input → Target                  | Notes                          |  
-|---------------|---------------------------------|--------------------------------|  
-| **Denoising** | Noisy image → Clean image       | Add 15% Gaussian noise        |  
-| **Upscaling** | Low-res (64x64) → High-res (256x256) | Bicubic downsampling       |  
-| **Inpainting** | Masked image (25% black patches) → Full image | Random square masks |  
-| **Outpainting** | Image with black borders → Full image | Extend canvas by 25%      |  
+Sample outputs are saved in `samples/` directory. Quantitative results are logged in TensorBoard (in `logs/`).
 
-#### **3. Evaluation (Same for Both Models)**  
-Task | Metrics
+## References
 
-Denoising | PSNR, SSIM, MSE
-
-Super-resolution | PSNR, SSIM, LPIPS, FID
-
-Inpainting | L1 (masked), SSIM, FID
-
-Outpainting | L1 (border), SSIM, FID
+This implementation is based on:
+- WGAN: https://arxiv.org/abs/1701.07875
+- DDPM: https://arxiv.org/abs/2006.11239
