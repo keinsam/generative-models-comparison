@@ -2,3 +2,4 @@ data/
 logs/
 .vscode/
 __pycache__/
+weights/

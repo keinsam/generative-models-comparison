@@ -177,7 +177,7 @@ if __name__ == "__main__":
         critic_optimizer=critic_optimizer,
         device=DEVICE,
         nb_epochs=gan_hparams["nb_epochs"],
-        path="weights/{MODEL_NAME}.pth",
+        path=WEIGHT_PATH,
         nb_critic_itr=gan_hparams["nb_critic_itr"],
         weight_clip=gan_hparams["weight_clip"],
         writer=writer

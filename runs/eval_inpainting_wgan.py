@@ -1,4 +1,6 @@
 import os
+import sys
+
 import torch
 import matplotlib.pyplot as plt
 import shutil
@@ -8,6 +10,9 @@ from pathlib import Path
 import torchvision.transforms as transforms
 from torch.utils.data import DataLoader
 from torchvision.utils import save_image
+
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+
 
 from datasets.inpainting_datasets import InpaintingCIFAR10
 from models.inpainting_models import InpaintingGenerator, InpaintingCritic
@@ -45,8 +50,7 @@ dataset_val = InpaintingCIFAR10(root="data/", train=False, download=False, trans
 dataloader = DataLoader(dataset_val, batch_size=64, shuffle=True)
 
 # Initialize models
-generator = InpaintingGenerator(n_channel=wgan_hparams["img_channels"]).to(DEVICE)
-critic = InpaintingCritic(n_channel=wgan_hparams["img_channels"]).to(DEVICE)
+generator = InpaintingGenerator(wgan_hparams["latent_dim"], wgan_hparams["img_channels"]).to(DEVICE)
 
 def save_images(images, folder):
     if not os.path.exists(folder):
@@ -62,12 +66,15 @@ def test_inpainting_wgan(generator, dataloader, device, weight_path, output_real
     generator.load_state_dict(torch.load(weight_path, map_location=device))
     generator.eval()
 
+    fixed_noise = torch.randn(64, generator.latent_dim, device=device)
+
     with torch.no_grad():
         test_batch = next(iter(dataloader))
         test_masked, test_target, test_mask = [x.to(device) for x in test_batch]
 
         # Generate samples
-        samples = generator(test_masked, test_mask)
+        samples = generator(fixed_noise,test_masked)
+        samples = samples * (1 - test_mask) + test_masked * test_mask
 
         # Denormalize [-1, 1] → [0, 1]
         test_target = torch.clamp((test_target.cpu() + 1) / 2.0, 0, 1)
