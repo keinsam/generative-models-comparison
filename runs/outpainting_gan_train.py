@@ -20,6 +20,7 @@ with open("configs/outpainting_hparams.yaml", "r") as f:
 gan_hparams = hparams["gan"]
 
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
+MODEL_NAME = "outpainting_gan_v0"
 
 # Transformations
 transform = transforms.Compose([
@@ -46,7 +47,7 @@ generator_optimizer = optim.Adam(generator.parameters(), lr=gan_hparams["learnin
 critic_optimizer = optim.Adam(critic.parameters(), lr=gan_hparams["learning_rate"])
 
 # Tensorboard
-writer = SummaryWriter(log_dir="./logs/outpainting_gan_v1")
+writer = SummaryWriter(log_dir=f"./logs/{MODEL_NAME}")
 writer.add_hparams(gan_hparams, {})
 
 
@@ -139,6 +140,7 @@ def train_outpainting_gan(
                         grid = torch.cat([grid_input, grid_output, grid_real], dim=1)
 
                         writer.add_image("OutpaintingGAN/Samples", grid, global_step=step)
+                        torchvision.utils.save_image(grid, f"./samples/outpainting/{MODEL_NAME}.png")
             
             step += 1
         
@@ -161,7 +163,7 @@ if __name__ == "__main__":
         critic_optimizer=critic_optimizer,
         device=DEVICE,
         nb_epochs=gan_hparams["nb_epochs"],
-        path="weights/outpainting_gan_v1.pth",
+        path="weights/{MODEL_NAME}.pth",
         nb_critic_itr=gan_hparams["nb_critic_itr"],
         weight_clip=gan_hparams["weight_clip"],
         writer=writer
