@@ -19,6 +19,7 @@ with open("configs/outpainting_hparams.yaml", "r") as f:
 ddpm_hparams = hparams["ddpm"]
 
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
+MODEL_NAME = "outpainting_ddpm_v0"
 
 # === Dataset ===
 transforms = transforms.Compose(
@@ -30,7 +31,7 @@ transforms = transforms.Compose(
         ),
     ]
 )
-dataset = OutpaintingCIFAR10(root="data", train=True, download=False, transform=transforms, subset_size=10000)
+dataset = OutpaintingCIFAR10(root="data", train=True, download=False, transform=transforms, subset_size=25000)
 dataloader = DataLoader(dataset, batch_size=ddpm_hparams["batch_size"], shuffle=True)
 
 # === Model ===
@@ -43,8 +44,9 @@ model = OutpaintingDDPM(eps_model,
 # === Optimizer ===
 optimizer = torch.optim.Adam(model.parameters(), lr=ddpm_hparams["learning_rate"])
 
-# === Logging ===
-writer = SummaryWriter(log_dir="./logs/outpainting_ddpm_v0")
+# === Logging === 
+writer = SummaryWriter(log_dir=f"./logs/{MODEL_NAME}")
+writer.add_hparams(ddpm_hparams, {})
 
 # === Training ===
 def train_outpainting_ddpm(model, dataloader, optimizer, device, nb_epoch, path, writer=None):
@@ -90,6 +92,7 @@ def train_outpainting_ddpm(model, dataloader, optimizer, device, nb_epoch, path,
                 grid = torch.cat([grid_input, grid_output, grid_target], dim=1)
                 
                 writer.add_image("OutpaintingDDPM/Samples", grid, global_step=step)
+                torchvision.utils.save_image(grid, f"./samples/{MODEL_NAME}.png")
 
     torch.save(model.state_dict(), path)
 
@@ -102,6 +105,6 @@ if __name__ == "__main__":
         optimizer=optimizer,
         device=DEVICE,
         nb_epoch=ddpm_hparams["nb_epochs"],
-        path="./wrights/outpainting_ddpm.pth",
+        path=f"./weights/{MODEL_NAME}.pth",
         writer=writer
     )

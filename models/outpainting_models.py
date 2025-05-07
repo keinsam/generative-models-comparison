@@ -46,59 +46,6 @@ class OutpaintingGenerator(BaseGenerator):
         
         return self.net(x)
 
-# class OutpaintingDDPM(DDPM):
-#     def __init__(
-#         self,
-#         eps_model,
-#         betas,
-#         n_T,
-#         criterion,
-#         mask_value: float = 0.0,
-#         ):
-#         super().__init__(eps_model, betas, n_T, criterion)
-#         self.mask_value = mask_value 
-
-#     def forward(self, x: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:
-#         _ts = torch.randint(1, self.n_T, (x.shape[0],), device=x.device)
-#         eps = torch.randn_like(x)
-
-#         x_t = (
-#             self.sqrtab[_ts, None, None, None] * x
-#             + self.sqrtmab[_ts, None, None, None] * eps
-#         )
-
-#         x_t = mask * x + (1 - mask) * x_t
-
-#         pred_eps = self.eps_model(x_t, _ts / self.n_T)
-#         loss = self.criterion(eps, pred_eps)
-#         return loss
-
-#     @torch.no_grad()
-#     def sample(self, x_start: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:
-#         x_i = torch.randn_like(x_start).to(x_start.device)
-#         x_i = mask * x_start + (1 - mask) * x_i
-
-#         for i in range(self.n_T, 0, -1):
-#             t = torch.full((x_i.size(0),), i, device=x_i.device, dtype=torch.long)
-#             eps = self.eps_model(x_i, t)
-
-#             x_i = self.oneover_sqrta[i] * (x_i - eps * self.mab_over_sqrtmab[i])
-#             if i > 1:
-#                 z = torch.randn_like(x_i)
-#                 x_i += self.sqrt_beta_t[i] * z
-#             x_i = mask * x_start + (1 - mask) * x_i
-
-#         return x_i
-
-# class OutpaintingUNetEpsilon(UNetEpsilon):
-#     def __init__(self, n_channel, time_dim):
-#         super().__init__(n_channel, time_dim)
-#         # Adjust the input layer to handle [image, mask] concatenation
-#         self.init_conv= nn.Conv2d(n_channel * 2, 64, kernel_size=3, padding=1)
-        
-#     def forward(self, x: torch.Tensor, t: torch.Tensor) -> torch.Tensor:
-#         x = torch.cat([x, t], dim=1)
-#         return super().forward(x)
 
 class OutpaintingDDPM(DDPM):
     def __init__(
