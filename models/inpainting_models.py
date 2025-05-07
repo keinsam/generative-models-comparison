@@ -1,0 +1,119 @@
+import torch
+import torch.nn as nn
+from models.base_ddpm_models import DDPM,UNetEpsilon
+from models.base_gan_models import BaseGenerator, BaseCritic
+
+class InpaintingCritic(BaseCritic):
+    def __init__(self, img_channels):
+        # Double input channels to handle [image, mask] concatenation
+        super().__init__(img_channels * 2)
+
+    def forward(self, x, masked_x):
+        # Concatenate along channel dimension
+        x = torch.cat([x, masked_x], dim=1)
+        return super().forward(x)
+
+class InpaintingGenerator(BaseGenerator):
+    def __init__(self, latent_dim, img_channels):
+        super().__init__(latent_dim, img_channels)
+
+        # Replace the entire network to ensure proper 32x32 output
+        self.net = nn.Sequential(
+            # Input will be [noise_features + mask_features] x 1 x 1
+            self._block(latent_dim + 64, 512, 4, 1, 0),  # 4x4
+            self._block(512, 256, 4, 2, 1),  # 8x8
+            self._block(256, 128, 4, 2, 1),  # 16x16
+            nn.ConvTranspose2d(128, img_channels, 4, 2, 1),  # 32x32
+            nn.Tanh()
+        )
+
+        # Keep the mask projection
+        self.mask_projection = nn.Sequential(
+            nn.Conv2d(img_channels, 64, 3, padding=1),
+            nn.BatchNorm2d(64),
+            nn.ReLU(),
+            nn.AdaptiveAvgPool2d(1)  # Reduce to 1x1 to match noise
+        )
+
+    def forward(self, noise, masked_x):
+        # Process masked input to 1x1 features
+        mask_features = self.mask_projection(masked_x)
+        mask_features = mask_features.view(mask_features.size(0), -1)
+
+        # Combine with noise
+        x = torch.cat([noise, mask_features], dim=1)
+        x = x.unsqueeze(-1).unsqueeze(-1)  # Add spatial dimensions
+
+        return self.net(x)
+
+
+class InpaintingDDPM(DDPM):
+    def __init__(
+        self,
+        eps_model,
+        betas,
+        n_T,
+        criterion=nn.MSELoss(),
+    ):
+        super().__init__(eps_model, betas, n_T, criterion)
+
+    def forward(self, x: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:
+        """
+        x: original image [B, 3, H, W]
+        mask: binary mask [B, 3, H, W] with 1 for known, 0 for missing
+        """
+        mask_single = mask[:, 0:1, :, :]  # Convert to single channel
+
+        _ts = torch.randint(1, self.n_T, (x.shape[0],), device=x.device)
+        eps = torch.randn_like(x)
+
+        # Generate noisy image
+        x_t = (
+            self.sqrtab[_ts, None, None, None] * x
+            + self.sqrtmab[_ts, None, None, None] * eps
+        )
+
+        # Combine known (original) and unknown (noised)
+        x_t = mask * x + (1 - mask) * x_t
+
+        # Predict noise with mask as input
+        pred_eps = self.eps_model(torch.cat([x_t, mask_single], dim=1), _ts / self.n_T)
+        pred_eps = pred_eps[:, :3, :, :]  # Ensure 3 channels
+
+        # Loss only over masked (unknown) regions
+        mask_broadcast = mask_single.expand_as(eps)
+        return self.criterion(eps * (1 - mask_broadcast), pred_eps * (1 - mask_broadcast))
+
+    @torch.no_grad()
+    def sample(self, x_start: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:
+        """
+        x_start: image with known pixels filled in (e.g., masked image)
+        mask: binary mask [B, 3, H, W], with 1 for known, 0 for missing
+        """
+        mask_single = mask[:, 0:1, :, :]
+
+        x_i = torch.randn_like(x_start).to(x_start.device)
+        x_i = mask * x_start + (1 - mask) * x_i  # Keep known, noise unknown
+
+        for i in range(self.n_T, 0, -1):
+            t = torch.full((x_i.size(0),), i, device=x_i.device, dtype=torch.long)
+            eps = self.eps_model(torch.cat([x_i, mask_single], dim=1), t)
+            eps = eps[:, :3, :, :]
+
+            x_i_unknown = self.oneover_sqrta[i] * (x_i - eps * self.mab_over_sqrtmab[i])
+            if i > 1:
+                z = torch.randn_like(x_i)
+                x_i_unknown += self.sqrt_beta_t[i] * z
+
+            # Merge known and predicted regions
+            x_i = mask * x_start + (1 - mask) * x_i_unknown
+
+        return x_i
+
+class InpaintingUNetEpsilon(UNetEpsilon):
+    def __init__(self, n_channel, time_dim):
+        super().__init__(n_channel + 1, time_dim)  # +1 for the mask
+        self.final_conv = nn.Conv2d(64, n_channel, kernel_size=3, padding=1)
+
+    def forward(self, x: torch.Tensor, t: torch.Tensor) -> torch.Tensor:
+        return super().forward(x, t)
