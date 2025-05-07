@@ -145,7 +145,7 @@ def train_inpainting_gan(
 
                         # Generate samples
                         samples = generator(fixed_noise, test_masked)
-                        completed_samples = samples * test_mask + test_masked * (1 - test_mask)
+                        samples = samples * test_mask + test_masked * (1 - test_mask)
 
                         # Create grid of: masked images | generated samples | target images
                         grid_input = torchvision.utils.make_grid(test_masked, nrow=8, normalize=True)
