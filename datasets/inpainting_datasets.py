@@ -10,8 +10,8 @@ from .base_datasets import BaseCIFAR10
 from torchvision.utils import save_image
 
 class InpaintingCIFAR10(BaseCIFAR10):
-    def __init__(self, root, train, transform=None, subset_size=None, mask_folder=None):
-        super().__init__(root, train, transform, subset_size)
+    def __init__(self, root, train, download, transform=None, subset_size=None, mask_folder=None):
+        super().__init__(root, train,download, transform, subset_size)
         self.mask_folder = mask_folder
         self.counter = 0  # Initialisez le compteur
         if self.mask_folder:

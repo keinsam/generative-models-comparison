@@ -1,101 +1,122 @@
-import numpy as np
-from tqdm import tqdm
+from .base_ddpm_models import DDPM,UNetEpsilon
+from .base_gan_models import BaseGenerator, BaseCritic
+
+
 import torch
 import torch.nn as nn
-from .base_models import Diffusion,DDPM
 
+class InpaintingCritic(BaseCritic):
+    def __init__(self, img_channels):
+        # Double input channels to handle [image, mask] concatenation
+        super().__init__(img_channels * 2)
 
+    def forward(self, x, masked_x):
+        # Concatenate along channel dimension
+        x = torch.cat([x, masked_x], dim=1)
+        return super().forward(x)
 
-class Discriminator(nn.Module):
-    def __init__(self, channels_img, features_d):
-        super(Discriminator, self).__init__()
-        self.channels_img = channels_img
-        self.features_d = features_d
-        self.disc = nn.Sequential(
-            # input: N x channels_img x 64 x 64
-            nn.Conv2d(channels_img, features_d, kernel_size=4, stride=2, padding=1),
-            nn.LeakyReLU(0.2),
-            # _block(in_channels, out_channels, kernel_size, stride, padding)
-            self._block(features_d, features_d * 2, 4, 2, 1),
-            self._block(features_d * 2, features_d * 4, 4, 2, 1),
-            # self._block(features_d * 4, features_d * 8, 4, 2, 1),
-            # After all _block img output is 4x4 (Conv2d below makes into 1x1)
-            nn.Conv2d(features_d * 4, 1, kernel_size=4, stride=2, padding=0),
+class InpaintingGenerator(BaseGenerator):
+    def __init__(self, latent_dim, img_channels):
+        super().__init__(latent_dim, img_channels)
+
+        # Replace the entire network to ensure proper 32x32 output
+        self.net = nn.Sequential(
+            # Input will be [noise_features + mask_features] x 1 x 1
+            self._block(latent_dim + 64, 512, 4, 1, 0),  # 4x4
+            self._block(512, 256, 4, 2, 1),  # 8x8
+            self._block(256, 128, 4, 2, 1),  # 16x16
+            nn.ConvTranspose2d(128, img_channels, 4, 2, 1),  # 32x32
+            nn.Tanh()
         )
 
-    def _block(self, in_channels, out_channels, kernel_size, stride, padding):
-        return nn.Sequential(
-            nn.Conv2d(in_channels, out_channels, kernel_size, stride, padding, bias=False),
-            nn.InstanceNorm2d(out_channels, affine=True),
-            nn.LeakyReLU(0.2),
-        )
-
-    def forward(self, x):
-        return self.disc(x)
-
-
-
-class Generator(nn.Module):
-    def __init__(self, latent_dim, channels_img, features_g):
-        super(Generator, self).__init__()
-        self.latent_dim = latent_dim
-        self.channels_img = channels_img
-        self.features_g = features_g
-
-        # Réseau pour traiter le vecteur latent
-        self.latent_net = nn.Sequential(
-            self._block(latent_dim, features_g * 8, 4, 1, 0),  # img: 4x4
-            self._block(features_g * 8, features_g * 4, 4, 2, 1),  # img: 8x8
-            self._block(features_g * 4, features_g * 2, 4, 2, 1),  # img: 16x16
-        )
-
-        # Réseau pour traiter l'image masquée
-        self.masked_net = nn.Sequential(
-            nn.Conv2d(channels_img, features_g * 2, kernel_size=4, stride=2, padding=1),  # img: 32x32
-            nn.BatchNorm2d(features_g * 2),
+        # Keep the mask projection
+        self.mask_projection = nn.Sequential(
+            nn.Conv2d(img_channels, 64, 3, padding=1),
+            nn.BatchNorm2d(64),
             nn.ReLU(),
-            nn.Conv2d(features_g * 2, features_g * 4, kernel_size=4, stride=2, padding=1),  # img: 16x16
-            nn.BatchNorm2d(features_g * 4),
-            nn.ReLU(),
+            nn.AdaptiveAvgPool2d(1)  # Reduce to 1x1 to match noise
         )
 
-        # Réseau pour fusionner et générer l'image finale
-        self.final_net = nn.Sequential(
-            self._block(features_g * 6, features_g * 4, 4, 2, 1),  # img: 32x32
-            nn.ConvTranspose2d(features_g * 4, channels_img, kernel_size=4, stride=2, padding=1),  # img: 64x64
-            nn.Tanh(),
+    def forward(self, noise, masked_x):
+        # Process masked input to 1x1 features
+        mask_features = self.mask_projection(masked_x)
+        mask_features = mask_features.view(mask_features.size(0), -1)
+
+        # Combine with noise
+        x = torch.cat([noise, mask_features], dim=1)
+        x = x.unsqueeze(-1).unsqueeze(-1)  # Add spatial dimensions
+
+        return self.net(x)
+
+
+class InpaintingDDPM(DDPM):
+    def __init__(
+        self,
+        eps_model,
+        betas,
+        n_T,
+        criterion=nn.MSELoss(),
+    ):
+        super().__init__(eps_model, betas, n_T, criterion)
+
+    def forward(self, x: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:
+        """
+        x: original image [B, 3, H, W]
+        mask: binary mask [B, 3, H, W] with 1 for known, 0 for missing
+        """
+        mask_single = mask[:, 0:1, :, :]  # Convert to single channel
+
+        _ts = torch.randint(1, self.n_T, (x.shape[0],), device=x.device)
+        eps = torch.randn_like(x)
+
+        # Generate noisy image
+        x_t = (
+            self.sqrtab[_ts, None, None, None] * x
+            + self.sqrtmab[_ts, None, None, None] * eps
         )
 
-    def _block(self, in_channels, out_channels, kernel_size, stride, padding):
-        return nn.Sequential(
-            nn.ConvTranspose2d(in_channels, out_channels, kernel_size, stride, padding, bias=False),
-            nn.BatchNorm2d(out_channels),
-            nn.ReLU(),
-        )
+        # Combine known (original) and unknown (noised)
+        x_t = mask * x + (1 - mask) * x_t
 
-    def forward(self, noise, masked_image):
-        # Traiter le vecteur latent
-        latent_features = self.latent_net(noise)
+        # Predict noise with mask as input
+        pred_eps = self.eps_model(torch.cat([x_t, mask_single], dim=1), _ts / self.n_T)
+        pred_eps = pred_eps[:, :3, :, :]  # Ensure 3 channels
 
-        # Traiter l'image masquée
-        masked_features = self.masked_net(masked_image)
+        # Loss only over masked (unknown) regions
+        mask_broadcast = mask_single.expand_as(eps)
+        return self.criterion(eps * (1 - mask_broadcast), pred_eps * (1 - mask_broadcast))
 
-        # Ajuster les dimensions des tenseurs pour qu'ils puissent être concaténés
-        if latent_features.shape[2:] != masked_features.shape[2:]:
-            latent_features = nn.functional.interpolate(latent_features, size=masked_features.shape[2:], mode='bilinear', align_corners=False)
+    @torch.no_grad()
+    def sample(self, x_start: torch.Tensor, mask: torch.Tensor) -> torch.Tensor:
+        """
+        x_start: image with known pixels filled in (e.g., masked image)
+        mask: binary mask [B, 3, H, W], with 1 for known, 0 for missing
+        """
+        mask_single = mask[:, 0:1, :, :]
 
-        # Fusionner les caractéristiques
-        combined_features = torch.cat((latent_features, masked_features), dim=1)
+        x_i = torch.randn_like(x_start).to(x_start.device)
+        x_i = mask * x_start + (1 - mask) * x_i  # Keep known, noise unknown
 
-        # Générer l'image finale
-        output = self.final_net(combined_features)
-        return output
+        for i in range(self.n_T, 0, -1):
+            t = torch.full((x_i.size(0),), i, device=x_i.device, dtype=torch.long)
+            eps = self.eps_model(torch.cat([x_i, mask_single], dim=1), t)
+            eps = eps[:, :3, :, :]
 
+            x_i_unknown = self.oneover_sqrta[i] * (x_i - eps * self.mab_over_sqrtmab[i])
+            if i > 1:
+                z = torch.randn_like(x_i)
+                x_i_unknown += self.sqrt_beta_t[i] * z
 
-def initialize_weights(model):
-    # Initializes weights according to the DCGAN paper
-    for m in model.modules():
-        if isinstance(m, (nn.Conv2d, nn.ConvTranspose2d, nn.BatchNorm2d)):
-            nn.init.normal_(m.weight.data, 0.0, 0.02)
+            # Merge known and predicted regions
+            x_i = mask * x_start + (1 - mask) * x_i_unknown
 
+        return x_i
+
+class InpaintingUNetEpsilon(UNetEpsilon):
+    def __init__(self, n_channel, time_dim):
+        super().__init__(n_channel + 1, time_dim)  # +1 for the mask
+        self.final_conv = nn.Conv2d(64, n_channel, kernel_size=3, padding=1)
+
+    def forward(self, x: torch.Tensor, t: torch.Tensor) -> torch.Tensor:
+        return super().forward(x, t)
 
