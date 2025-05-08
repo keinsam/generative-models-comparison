@@ -55,7 +55,10 @@ optimizer = torch.optim.Adam(model.parameters(), lr=ddpm_hparams["learning_rate"
 
 # === Logging ===
 writer = SummaryWriter(log_dir=LOG_DIR)
+writer.add_hparams(ddpm_hparams, {})
 
+def denormalize(tensor):
+    return (tensor * 0.5) + 0.5
 
 # === Training ===
 def train_inpainting_ddpm(model, dataloader, optimizer, device, nb_epoch, path, writer=None):
@@ -94,13 +97,19 @@ def train_inpainting_ddpm(model, dataloader, optimizer, device, nb_epoch, path, 
                 # Generate samples
                 samples = model.sample(test_masked, test_mask)
 
-                # Create grid of: masked images | generated samples | target images
-                grid_input = torchvision.utils.make_grid(test_masked, nrow=8, normalize=True)
-                grid_output = torchvision.utils.make_grid(samples, nrow=8, normalize=True)
-                grid_target = torchvision.utils.make_grid(test_target, nrow=8, normalize=True)
+                # Denormalize images
+                test_masked = denormalize(test_masked)
+                samples = denormalize(samples)
+                test_target = denormalize(test_target)
+
+                # Create grid
+                grid_input = torchvision.utils.make_grid(test_masked, nrow=8)
+                grid_output = torchvision.utils.make_grid(samples, nrow=8)
+                grid_target = torchvision.utils.make_grid(test_target, nrow=8)
                 grid = torch.cat([grid_input, grid_output, grid_target], dim=1)
 
                 writer.add_image("InpaintingDDPM/Samples", grid, global_step=step)
+                torchvision.utils.save_image(grid, f"./samples/inpainting/{DDPM_MODEL_NAME}.png")
 
     torch.save(model.state_dict(), path)
 

@@ -44,7 +44,7 @@ transform = transforms.Compose([
 
 # Dataset and dataloader
 dataset = OutpaintingCIFAR10(root="data/", train=True, download=False, transform=transform, subset_size=10000, visible_ratio=0.75)
-dataloader = DataLoader(dataset, batch_size=gan_hparams["batch_size"], shuffle=False)
+dataloader = DataLoader(dataset, batch_size=gan_hparams["batch_size"], shuffle=True)
 
 # Models
 generator = OutpaintingGenerator(gan_hparams["latent_dim"], gan_hparams["img_channels"]).to(DEVICE)
@@ -174,7 +174,7 @@ if __name__ == "__main__":
         critic_optimizer=critic_optimizer,
         device=DEVICE,
         nb_epochs=gan_hparams["nb_epochs"],
-        path="weights/{MODEL_NAME}.pth",
+        path=f"weights/{MODEL_NAME}.pth",
         nb_critic_itr=gan_hparams["nb_critic_itr"],
         weight_clip=gan_hparams["weight_clip"],
         writer=writer

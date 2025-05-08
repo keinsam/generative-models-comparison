@@ -44,8 +44,8 @@ transform = transforms.Compose([
 ])
 
 # Dataset and dataloader
-dataset = InpaintingCIFAR10(root="data/", train=True, download=False, transform=transform, subset_size=10000)  # Use inpainting dataset
-dataloader = DataLoader(dataset, batch_size=gan_hparams["batch_size"], shuffle=False)
+dataset = InpaintingCIFAR10(root="data/", train=True, download=False, transform=transform, subset_size=10000)
+dataloader = DataLoader(dataset, batch_size=gan_hparams["batch_size"], shuffle=True)
 
 # Models
 generator = InpaintingGenerator(gan_hparams["latent_dim"], gan_hparams["img_channels"]).to(DEVICE)
@@ -60,6 +60,7 @@ critic_optimizer = optim.Adam(critic.parameters(), lr=gan_hparams["critic_learni
 
 # Tensorboard
 writer = SummaryWriter(log_dir=LOG_DIR)
+writer.add_hparams(gan_hparams, {})
 
 
 def train_inpainting_gan(
@@ -145,7 +146,7 @@ def train_inpainting_gan(
 
                         # Generate samples
                         samples = generator(fixed_noise, test_masked)
-                        samples = samples * test_mask + test_masked * (1 - test_mask)
+                        samples = samples * (1-test_mask) + test_masked * test_mask
 
                         # Create grid of: masked images | generated samples | target images
                         grid_input = torchvision.utils.make_grid(test_masked, nrow=8, normalize=True)
@@ -153,7 +154,8 @@ def train_inpainting_gan(
                         grid_target = torchvision.utils.make_grid(test_target, nrow=8, normalize=True)
                         grid = torch.cat([grid_input, grid_output, grid_target], dim=1)
 
-                        writer.add_image("InpaintingWGAN/Samples", grid, global_step=step)
+                        writer.add_image("InpaintingGAN/Samples", grid, global_step=step)
+                        torchvision.utils.save_image(grid, f"./samples/inpainting/{WGAN_MODEL_NAME}.png")
 
             step += 1
 
