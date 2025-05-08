@@ -87,19 +87,19 @@ def test_outpainting_ddpm(model, dataloader, device, weight_path, output_real_fo
 
         fig, axs = plt.subplots(3, num_samples, figsize=(15, 12))
         for i in range(num_samples):
-            axs[0, i].imshow(np.transpose(test_target[i].numpy(), (1, 2, 0)))
-            axs[0, i].axis('off')
-            axs[0, i].set_title('Original')
-
             axs[1, i].imshow(np.transpose(test_masked[i].numpy(), (1, 2, 0)))
             axs[1, i].axis('off')
             axs[1, i].set_title('Masked')
 
             axs[2, i].imshow(np.transpose(samples[i].numpy(), (1, 2, 0)))
             axs[2, i].axis('off')
-            axs[2, i].set_title('Outpainted')
+            axs[2, i].set_title('Generated')
 
-        plt.suptitle('Outpainting Results')
+            axs[0, i].imshow(np.transpose(test_target[i].numpy(), (1, 2, 0)))
+            axs[0, i].axis('off')
+            axs[0, i].set_title('Target')
+
+        plt.suptitle('Outpainting with DDPM')
         plt.show()
 
 
