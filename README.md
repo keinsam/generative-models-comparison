@@ -1,13 +1,13 @@
 # Generative Models Comparison: WGAN vs DDPM for Image Restoration
 
-This repository contains the implementation and experiments comparing Wasserstein Generative Adversarial Networks (WGAN) and Denoising Diffusion Probabilistic Models (DDPM) for three image restoration tasks: inpainting, outpainting, and super-resolution.
+This repository contains the implementation and experiments comparing Wasserstein Generative Adversarial Networks (WGAN) and Denoising Diffusion Probabilistic Models (DDPM) on three image restoration tasks: inpainting, outpainting, and super-resolution. The report is available [here](https://keinsam.github.io/generative-models-comparison/report.pdf).
 
-## Project Structure
+## Structure
 
 ```
 .
 ├── configs/              # Hyperparameters and paths
-├── data/                 # Datasets
+├── data/                 # Data files
 ├── datasets/             # Custom dataset implementations
 ├── docs/                 # Project documentation
 ├── logs/                 # Training logs (TensorBoard)
@@ -18,7 +18,7 @@ This repository contains the implementation and experiments comparing Wasserstei
 └── weights/              # Trained model weights
 ```
 
-## Getting Started
+## Usage
 
 1. Clone the repository:
    ```bash
@@ -28,25 +28,30 @@ This repository contains the implementation and experiments comparing Wasserstei
 
 2. Train a model:
    ```bash
+   python runs/train/inpainting_gan_train.py
    python runs/train/inpainting_ddpm_train.py
+   python runs/train/outpainting_gan_train.py
+   python runs/train/outpainting_ddpm_train.py
    ```
 
-3. Generate samples:
+3. Evaluate a model and generate samples:
    ```bash
-   python runs/infer/inpainting_ddpm_infer.py
+   python runs/infer/inpainting_gan_train.py
+   python runs/infer/inpainting_ddpm_train.py
+   python runs/infer/outpainting_gan_train.py
+   python runs/infer/outpainting_ddpm_train.py
    ```
 
-## Configuration
+## Configurations
 
 Modify YAML files in `configs/` to adjust:
 - Model hyperparameters
 - Training parameters
-- Dataset paths
-- Task-specific settings
+- Paths
 
 ## Results
 
-Sample outputs are saved in `samples/` directory. Quantitative results are logged in TensorBoard (in `logs/`).
+Sample outputs are saved in `samples/` directory. Results are logged in TensorBoard (in `logs/`).
 
 ## References
 
